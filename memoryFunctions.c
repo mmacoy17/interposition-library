@@ -20,6 +20,6 @@ void free(void *ptr){
   
   orig_free original_free;
   original_free = (orig_free)dlsym(RTLD_NEXT, "free");
-  return original_free(*ptr);
+  return original_free(ptr);
 }
 
