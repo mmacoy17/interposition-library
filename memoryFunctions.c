@@ -42,13 +42,14 @@ Node headCOLD; 			//haha
 //============================ METHOD DECLARATIONS ============================
 
 
-Node dumbSearchAlgo(void *);
-
+int dumbSearchAlgo(void *);
+void movePage(void *, int);
 
 //============================= MEMORY MANAGEMENT =============================
 
 /*
  * Passthrough function for malloc which ultimately calls the original malloc
+ * after setting up a new Node and adding it to the HOT queue if need be
  */
 typedef void* (*orig_malloc)(size_t size); 
 
@@ -58,7 +59,17 @@ void *malloc(size_t size){
   original_malloc = (orig_malloc)dlsym(RTLD_NEXT, "malloc");
   void *location = original_malloc(size);
 
-  
+  int check = dumbSearchAlgo(location);
+  if (check >= 0){
+  	// Node was either in the HOT queue already, or just put there by mprotect()
+  	return location;
+  }
+  else{
+  	// New page. Must create node, and add to HOT queue
+  	movePage(location, 1);
+
+  }
+  return location;
 }
 
 /*
@@ -76,7 +87,6 @@ void free(void *ptr){
 
 //============================== PAGE HANDLING ================================
 
-//TODO check to make sure page number is not NULL
 
 /*
  * Takes the contents of a page being moved in or out of the hot
@@ -87,6 +97,9 @@ void free(void *ptr){
  */
 void dumpPage(void *addr, int direction){
 	uintptr_t pageInfo = (uintptr_t) PAGENUM((uintptr_t)addr);
+	if (pageInfo == 0){
+		return;	// Do not dump if it is a dummy Node
+	}
 	if (direction == 1) pageInfo = pageInfo & INBOUND_MASK;
 
 	FILE *file = fopen("Page_Dump.txt", "a");
@@ -117,6 +130,22 @@ void movePage(void *addr, int direction){
 		n.prev = leastRecentHOT.prev;
 		leastRecentHOT = *n.next;
 		mostRecentHOT = n;
+
+		if (dumbSearchAlgo(addr) == 0){
+			Node currentNode = headCOLD;
+			int found = 0;
+			while (currentNode.next != NULL && !found){
+				if (n.pageNumber == currentNode.pageNumber){
+					found = 1;
+				}
+				else{
+					currentNode = *currentNode.next;
+				}
+			}
+			// once found, remove from COLD queue
+			currentNode.prev->next = currentNode.next;
+			currentNode.next->prev = currentNode.prev;
+		}
 	}
 	// move a copy of leastRecentHOT to the front of the COLD queue
 	else{
@@ -163,8 +192,34 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
 
 }
 
-
-Node dumbSearchAlgo(void *addr){
+/*
+ * Slow algorith that searches all of the existing pages and returns 1 if
+ * the Node exists in the HOT queue, 0 if it exists in the COLD queue, and
+ * -1 if it does not exist at all.
+ */
+int dumbSearchAlgo(void *addr){
+	uintptr_t pageNum = PAGENUM((uintptr_t)addr);
+	int i;
+	Node currentNode = leastRecentHOT;
+	for (i=0; i<queueSizeHOT; ++i){
+		if (pageNum == currentNode.pageNumber){
+			return 1;
+		}
+		else{
+			currentNode = *currentNode.next;
+		}
+	}
+	// here if the node does not exist in HOT
+	currentNode = headCOLD;
+	while (currentNode.next != NULL){
+		if (pageNum == currentNode.pageNumber){
+			return 0;
+		}
+		else{
+			currentNode = *currentNode.next;
+		}
+	}
+	return -1;
 }
 
 
@@ -175,8 +230,8 @@ Node dumbSearchAlgo(void *addr){
  * Front of the queue is the least recently added Node
  */
 void createQueue(int size){
-	int i = 0;
-	for (i; i<size; ++i){
+	int i;
+	for (i=0; i<size; ++i){
 		printf("%s %d\n", "Created Node: ", i+1);
 		INIT_NODE(n);
 		if (leastRecentHOT.pageNumber == 0){
