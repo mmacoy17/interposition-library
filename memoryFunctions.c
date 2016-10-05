@@ -32,7 +32,7 @@ typedef struct Node {
 
 // used to track the HOT queue
 int queueSizeHOT;
-Node leastRecentHOT;	// oldest member of the queue
+Node leastRecentHOT;	        // oldest member of the queue
 Node mostRecentHOT;		// newest member of the queue
 
 // used to track the COLD queue
@@ -60,6 +60,7 @@ void *malloc(size_t size){
   void *location = original_malloc(size);
 
   int check = dumbSearchAlgo(location);
+  return; // TODO remove after test
   if (check >= 0){
   	// Node was either in the HOT queue already, or just put there by mprotect()
   	return location;
@@ -119,6 +120,7 @@ void dumpPage(void *addr, int direction){
 // 0 indicates moving out of the HOT queue, 1 indicates moving in
 void movePage(void *addr, int direction){
 	if (direction == 1){
+	
 		// start by moving what is in the needed spot to the cold queue
 		movePage(NULL, 0);
 
@@ -128,9 +130,10 @@ void movePage(void *addr, int direction){
 		n.pageNumber = (uintptr_t)addr >> 12;		// TODO make sure consistent use and non use of offset
 		n.next = leastRecentHOT.next;
 		n.prev = leastRecentHOT.prev;
-		leastRecentHOT = *n.next;
+		leastRecentHOT = *n.next;          // TODO this is the line that is causing the seg fault
+		return; // TODO remove after test
 		mostRecentHOT = n;
-
+		
 		if (dumbSearchAlgo(addr) == 0){
 			Node currentNode = headCOLD;
 			int found = 0;
@@ -149,9 +152,10 @@ void movePage(void *addr, int direction){
 	}
 	// move a copy of leastRecentHOT to the front of the COLD queue
 	else{
-		Node n = leastRecentHOT;
+		Node n = leastRecentHOT;		
 		n.next = headCOLD.next;
-		headCOLD.next->prev = &n;
+		if (headCOLD.next != NULL)
+		  headCOLD.next->prev = &n;
 		headCOLD.next = &n;
 		n.prev = &headCOLD;
 	}
@@ -206,7 +210,7 @@ int dumbSearchAlgo(void *addr){
 			return 1;
 		}
 		else{
-			currentNode = *currentNode.next;
+		  currentNode = *(currentNode.next);       // TODO also causing seg faults
 		}
 	}
 	// here if the node does not exist in HOT
