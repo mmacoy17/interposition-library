@@ -36,6 +36,7 @@ Node *mostRecentHOT;		// newest member of the queue
 
 // used to track the COLD queue
 Node headCOLD; 			//haha
+int queueSizeCOLD = 0;
 
 // used to tell malloc to start intervening
 int SETUP_FINISHED = 0;
@@ -154,17 +155,21 @@ void movePage(void *addr, int direction){
 			// once found, remove from COLD queue
 			currentNode.prev->next = currentNode.next;
 			currentNode.next->prev = currentNode.prev;
+			queueSizeCOLD--;
 		}
 	}
 	// move a copy of leastRecentHOT to the front of the COLD queue
 	// TODO is this really a copy?
 	else{
-		Node n = *leastRecentHOT;		
-		n.next = headCOLD.next;
-		if (headCOLD.next != NULL)
-		  headCOLD.next->prev = &n;
-		headCOLD.next = &n;
-		n.prev = &headCOLD;
+		Node n = *leastRecentHOT;
+		if(n.pageNumber != 0){
+		  n.next = headCOLD.next;
+		  if (headCOLD.next != NULL)
+		    headCOLD.next->prev = &n;
+		  headCOLD.next = &n;
+		  n.prev = &headCOLD;
+		  queueSizeCOLD++;
+		}
 	}
 
 }
@@ -231,13 +236,16 @@ int dumbSearchAlgo(void *addr){
 	  }
 	}
 	// here if the node does not exist in HOT
-	currentNode = &headCOLD;
-	while (currentNode->next != NULL){
+	currentNode = headCOLD.next;
+        for(i=0; i<queueSizeCOLD; ++i){
 		if (pageNum == currentNode->pageNumber){
-			return 0;
+		    printf("%s", "Made it into if\n");
+		    return 0;
 		}
 		else{
-			currentNode = currentNode->next;
+		    printf("%s", "Post if\n");
+		    currentNode = currentNode->next;
+		    printf("%p \n", currentNode); 
 		}
 	}
 	printf("%s", "Returning -1 to malloc\n");
