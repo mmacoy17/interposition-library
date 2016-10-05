@@ -204,13 +204,13 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
 int dumbSearchAlgo(void *addr){
 	uintptr_t pageNum = PAGENUM((uintptr_t)addr);
 	int i;
-	Node currentNode = leastRecentHOT;
+	Node *currentNode = leastRecentHOT;
 	for (i=0; i<queueSizeHOT; ++i){
-		if (pageNum == currentNode.pageNumber){
+		if (pageNum == currentNode->pageNumber){
 			return 1;
 		}
 		else{
-		  currentNode = *(currentNode.next);       // TODO also causing seg faults
+		  currentNode = currentNode.next;       // TODO also causing seg faults
 		}
 	}
 	// here if the node does not exist in HOT
