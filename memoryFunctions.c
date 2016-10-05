@@ -13,7 +13,6 @@
 #define PAGEBASE_MASK ~OFFSET_MASK
 #define PAGENUM(addr) (addr & PAGEBASE_MASK) >> 12
 #define INBOUND_MASK 0x8000000000000000
-#define INIT_NODE(node) Node node = {.pageNumber = 0, .next = NULL, .prev = NULL}
 
 /*
  * Each queue (hot and cold) is designed to be made up of Nodes
@@ -32,11 +31,14 @@ typedef struct Node {
 
 // used to track the HOT queue
 int queueSizeHOT;
-Node leastRecentHOT;	        // oldest member of the queue
-Node mostRecentHOT;		// newest member of the queue
+Node *leastRecentHOT;	        // oldest member of the queue
+Node *mostRecentHOT;		// newest member of the queue
 
 // used to track the COLD queue
 Node headCOLD; 			//haha
+
+// used to tell malloc to start intervening
+int SETUP_FINISHED = 0;
 
 
 //============================ METHOD DECLARATIONS ============================
@@ -59,8 +61,11 @@ void *malloc(size_t size){
   original_malloc = (orig_malloc)dlsym(RTLD_NEXT, "malloc");
   void *location = original_malloc(size);
 
+  if (!SETUP_FINISHED){
+    return location;
+  }
+
   int check = dumbSearchAlgo(location);
-  return; // TODO remove after test
   if (check >= 0){
   	// Node was either in the HOT queue already, or just put there by mprotect()
   	return location;
@@ -68,7 +73,6 @@ void *malloc(size_t size){
   else{
   	// New page. Must create node, and add to HOT queue
   	movePage(location, 1);
-
   }
   return location;
 }
@@ -82,6 +86,7 @@ void free(void *ptr){
   printf("%s", "Calling free()\n");
   orig_free original_free;
   original_free = (orig_free)dlsym(RTLD_NEXT, "free");
+  printf("%s", "Calling free() end\n");
   return original_free(ptr);
 }
 
@@ -119,26 +124,27 @@ void dumpPage(void *addr, int direction){
 // TODO create a hash map of elements that are in the cold queue
 // 0 indicates moving out of the HOT queue, 1 indicates moving in
 void movePage(void *addr, int direction){
+  printf("%s %p, %d\n", "Called with the parameters: ", addr, direction);
 	if (direction == 1){
-	
+     
 		// start by moving what is in the needed spot to the cold queue
 		movePage(NULL, 0);
 
 		// create new Node, insert it into the position of the 
 		// current least recently added Node, and update
-		Node n;
-		n.pageNumber = (uintptr_t)addr >> 12;		// TODO make sure consistent use and non use of offset
-		n.next = leastRecentHOT.next;
-		n.prev = leastRecentHOT.prev;
-		leastRecentHOT = *n.next;          // TODO this is the line that is causing the seg fault
-		return; // TODO remove after test
+		Node *n = malloc(sizeof(Node));
+		printf("%s %p", "Malloc in movePage() at loc: ", n);
+		n->pageNumber = (uintptr_t)addr >> 12;		// TODO make sure consistent use and non use of offset
+		n->next = leastRecentHOT->next;
+		n->prev = leastRecentHOT->prev;
+		leastRecentHOT = n->next;         
 		mostRecentHOT = n;
 		
 		if (dumbSearchAlgo(addr) == 0){
 			Node currentNode = headCOLD;
 			int found = 0;
 			while (currentNode.next != NULL && !found){
-				if (n.pageNumber == currentNode.pageNumber){
+				if (n->pageNumber == currentNode.pageNumber){
 					found = 1;
 				}
 				else{
@@ -151,8 +157,9 @@ void movePage(void *addr, int direction){
 		}
 	}
 	// move a copy of leastRecentHOT to the front of the COLD queue
+	// TODO is this really a copy?
 	else{
-		Node n = leastRecentHOT;		
+		Node n = *leastRecentHOT;		
 		n.next = headCOLD.next;
 		if (headCOLD.next != NULL)
 		  headCOLD.next->prev = &n;
@@ -167,7 +174,9 @@ void movePage(void *addr, int direction){
 typedef int (*orig_mprotect)(void *addr, size_t len, int prot);
 
 int mprotect(void *addr, size_t len, int prot){
-	printf("Protecting page %lu", ((uintptr_t)addr >> 12));
+  int temp = 0;
+  if (prot == PROT_NONE) temp = 1;
+  printf("Protecting page %lu, %d \n", ((uintptr_t)addr >> 12), temp);
 
 	// 0 indicates moving out of the HOT queue, 1 indicates moving in
 	int direction = 0;
@@ -188,7 +197,10 @@ int mprotect(void *addr, size_t len, int prot){
  * unprotecting it (which dumps and moves the page in the process)
  */
 void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
-    uintptr_t mem_address = (uintptr_t)(info->si_addr);
+  int temp = 0;
+  if (info->si_code == SEGV_MAPERR) temp = 1;
+  printf("%s %p,   %d\n", "SIGSEGV fault called on: ", info->si_addr, temp);   //TODO remove after testing
+        uintptr_t mem_address = (uintptr_t)(info->si_addr);
 	uintptr_t page_addr = (uintptr_t)(mem_address & PAGEBASE_MASK);
 	//int page_num = PAGENUM(mem_address);
 
@@ -202,20 +214,22 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
  * -1 if it does not exist at all.
  */
 int dumbSearchAlgo(void *addr){
+  printf("%s %p\n", "The location from malloc is: ", addr);
 	uintptr_t pageNum = PAGENUM((uintptr_t)addr);
+	printf("%s %lu\n", "The associated page number is: ", pageNum);
 	int i;
-	Node *currentNode = &leastRecentHOT;
+	Node *currentNode = leastRecentHOT;
 	for (i=0; i<queueSizeHOT; ++i){
-		if (pageNum == currentNode->pageNumber){
-			return 1;
-		}
-		else{
-		  currentNode = currentNode->next;               // TODO also causing seg faults
-		  printf("%p \n", currentNode);       
-		}
+	  if (pageNum == currentNode->pageNumber){
+	    printf("%s", "IT WORKED!");   	
+	    return 1;
+	  }
+	  else{
+	    printf("%p \n", currentNode); 
+	    currentNode = currentNode->next;              
+         
+	  }
 	}
-	printf("%s", "End of Loop\n");
-	return 2; // TODO remove after testing
 	// here if the node does not exist in HOT
 	currentNode = &headCOLD;
 	while (currentNode->next != NULL){
@@ -226,6 +240,7 @@ int dumbSearchAlgo(void *addr){
 			currentNode = currentNode->next;
 		}
 	}
+	printf("%s", "Returning -1 to malloc\n");
 	return -1;
 }
 
@@ -233,27 +248,37 @@ int dumbSearchAlgo(void *addr){
 //============================== INITIALIZATIONS ==============================
 
 /*
+ * Acts as a constructor for Nodes
+ * Sets the page number to zero and the pointers to NULL
+ */
+void initNode(Node *n){
+  n->pageNumber = 0;
+  n->prev = NULL;
+  n->next = NULL;
+}
+
+/*
  * Initializes the HOT queue of Nodes of a specified size
  * Front of the queue is the least recently added Node
  */
 void createQueue(int size){
 	int i;
-	for (i=0; i<size; ++i){		
-		INIT_NODE(n);
+	for (i=0; i<size; ++i){
+	  Node *n = malloc(sizeof(Node));
+	  initNode(n);
 		if (i == 0){
 			mostRecentHOT = n;
 			leastRecentHOT = n;
 			//TODO Need to edit .next and .prev fields to point to self?
 		}
 		else{
-		  printf("%s %d\n", "Created Node: ", i+1);
-			n.prev = &mostRecentHOT;
-			mostRecentHOT.next = &n;
+			n->prev = mostRecentHOT;
+			mostRecentHOT->next = n;
 			mostRecentHOT = n;
 		}
 	}
-	mostRecentHOT.next = &leastRecentHOT;
-	leastRecentHOT.prev = &mostRecentHOT;
+	mostRecentHOT->next = leastRecentHOT;
+	leastRecentHOT->prev = mostRecentHOT;
 }
 
 /*
@@ -267,12 +292,11 @@ void _init_(){
 	sigact.sa_sigaction = &SIGSEGV_handler;
 
 	sigaction(SIGSEGV, &sigact, NULL);
-
-	queueSizeHOT = strtol(getenv("QUEUE_SIZE"), NULL, 10);
-	leastRecentHOT.pageNumber = 0;
-	mostRecentHOT.pageNumber = 0;
+	
+	queueSizeHOT = strtol(getenv("QUEUE_SIZE"), NULL, 10);	
 	createQueue(queueSizeHOT);
-	INIT_NODE(headCOLD);
+	initNode(&headCOLD);
+	SETUP_FINISHED = 1;
 }
 
 
