@@ -39,6 +39,12 @@ Node mostRecentHOT;		// newest member of the queue
 Node headCOLD; 			//haha
 
 
+//============================ METHOD DECLARATIONS ============================
+
+
+Node dumbSearchAlgo(void *);
+
+
 //============================= MEMORY MANAGEMENT =============================
 
 /*
@@ -50,7 +56,9 @@ void *malloc(size_t size){
   
   orig_malloc original_malloc;
   original_malloc = (orig_malloc)dlsym(RTLD_NEXT, "malloc");
-  return original_malloc(size);
+  void *location = original_malloc(size);
+
+  
 }
 
 /*
@@ -156,6 +164,10 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
 }
 
 
+Node dumbSearchAlgo(void *addr){
+}
+
+
 //============================== INITIALIZATIONS ==============================
 
 /*
@@ -165,7 +177,7 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
 void createQueue(int size){
 	int i = 0;
 	for (i; i<size; ++i){
-		printf("%s %d", "Created Node: ", i);
+		printf("%s %d\n", "Created Node: ", i+1);
 		INIT_NODE(n);
 		if (leastRecentHOT.pageNumber == 0){
 			mostRecentHOT = n;
