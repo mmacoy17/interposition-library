@@ -13,8 +13,17 @@
 #define PAGEBASE_MASK ~OFFSET_MASK
 #define PAGENUM(addr) (addr & PAGEBASE_MASK) >> 12
 #define INBOUND_MASK 0x8000000000000000
-#define INIT_NODE(node) Node node = {.next = NULL, .prev = NULL}
+#define INIT_NODE(node) Node node = {.pageNumber = 0, .next = NULL, .prev = NULL}
 
+/*
+ * Each queue (hot and cold) is designed to be made up of Nodes
+ *
+ * The next field holds the element added to the list immediately
+ * AFTER the current Node
+ *
+ * The prev field holds the element added to the list immediately
+ * BEFORE the currrent Node
+ */
 typedef struct Node {
 	uintptr_t pageNumber;
 	struct Node *next;
@@ -23,16 +32,18 @@ typedef struct Node {
 
 // used to track the HOT queue
 int queueSizeHOT;
-Node leastRecentHOT;
-Node mostRecentHOT;
+Node leastRecentHOT;	// oldest member of the queue
+Node mostRecentHOT;		// newest member of the queue
 
 // used to track the COLD queue
-Node headCOLD; //haha
+Node headCOLD; 			//haha
 
 
-//=============================================================================
+//============================= MEMORY MANAGEMENT =============================
 
-
+/*
+ * Passthrough function for malloc which ultimately calls the original malloc
+ */
 typedef void* (*orig_malloc)(size_t size); 
 
 void *malloc(size_t size){
@@ -42,6 +53,9 @@ void *malloc(size_t size){
   return original_malloc(size);
 }
 
+/*
+ * Passthrough function for free which ultimately calls the original free
+ */
 typedef void (*orig_free)(void *ptr);
 
 void free(void *ptr){
@@ -52,18 +66,19 @@ void free(void *ptr){
 }
 
 
-//=============================================================================
+//============================== PAGE HANDLING ================================
 
 //TODO check to make sure page number is not NULL
 
 /*
  * Takes the contents of a page being moved in or out of the hot
  * set and dumps it, preceeded by the page number and direction
- * of movement within the sets, out to a set file. (Use env var later?)
+ * of movement within the queues, out to a set file. (Use env var later for file?)
+ *
+ * 0 indicates moving out of the HOT queue, 1 indicates moving in
  */
 void dumpPage(void *addr, int direction){
-
-	uintptr_t pageInfo = (uintptr_t) addr;
+	uintptr_t pageInfo = (uintptr_t) PAGENUM((uintptr_t)addr);
 	if (direction == 1) pageInfo = pageInfo & INBOUND_MASK;
 
 	FILE *file = fopen("Page_Dump.txt", "a");
@@ -80,6 +95,7 @@ void dumpPage(void *addr, int direction){
 }
 
 // TODO create a hash map of elements that are in the cold queue
+// 0 indicates moving out of the HOT queue, 1 indicates moving in
 void movePage(void *addr, int direction){
 	if (direction == 1){
 		// start by moving what is in the needed spot to the cold queue
@@ -88,12 +104,13 @@ void movePage(void *addr, int direction){
 		// create new Node, insert it into the position of the 
 		// current least recently added Node, and update
 		Node n;
-		n.pageNumber = (uintptr_t)addr;
+		n.pageNumber = (uintptr_t)addr >> 12;		// TODO make sure consistent use and non use of offset
 		n.next = leastRecentHOT.next;
 		n.prev = leastRecentHOT.prev;
 		leastRecentHOT = *n.next;
 		mostRecentHOT = n;
 	}
+	// move a copy of leastRecentHOT to the front of the COLD queue
 	else{
 		Node n = leastRecentHOT;
 		n.next = headCOLD.next;
@@ -109,7 +126,7 @@ void movePage(void *addr, int direction){
 typedef int (*orig_mprotect)(void *addr, size_t len, int prot);
 
 int mprotect(void *addr, size_t len, int prot){
-	printf("Protecting page %p", addr);
+	printf("Protecting page %lu", ((uintptr_t)addr >> 12));
 
 	// 0 indicates moving out of the HOT queue, 1 indicates moving in
 	int direction = 0;
@@ -126,29 +143,29 @@ int mprotect(void *addr, size_t len, int prot){
 }
 
 /* 
- * Handles SIGSEGV signals by determing the page number at fault,
- * unprotecting it, and dumping the contents into a file, then adding
- * that page to the hot set
+ * Handles SIGSEGV signals by determing the page at fault, and
+ * unprotecting it (which dumps and moves the page in the process)
  */
 void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
-        uintptr_t mem_address = (uintptr_t)(info->si_addr);
+    uintptr_t mem_address = (uintptr_t)(info->si_addr);
 	uintptr_t page_addr = (uintptr_t)(mem_address & PAGEBASE_MASK);
-	int page_num = PAGENUM(mem_address);
+	//int page_num = PAGENUM(mem_address);
 
 	mprotect((void *)page_addr, PAGE_SIZE, PROT_NONE);
 
 }
 
 
-//=============================================================================
+//============================== INITIALIZATIONS ==============================
 
 /*
- * Initializes a queue of Nodes of a specified size
+ * Initializes the HOT queue of Nodes of a specified size
  * Front of the queue is the least recently added Node
  */
 void createQueue(int size){
 	int i = 0;
-	for (i; i<size-1; ++i){
+	for (i; i<size; ++i){
+		printf("%s %d", "Created Node: ", i);
 		INIT_NODE(n);
 		if (leastRecentHOT.pageNumber == 0){
 			mostRecentHOT = n;
