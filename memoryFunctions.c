@@ -5,6 +5,8 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <signal.h>
+#include <stdint.h>
+#include <stdlib.h>
 
 #define PAGE_SIZE 4096
 #define OFFSET_MASK 0xfff
@@ -14,7 +16,7 @@
 #define INIT_NODE(node) Node node = {.next = NULL, .prev = NULL}
 
 typedef struct Node {
-	int pageNumber;
+	uintptr_t pageNumber;
 	struct Node *next;
 	struct Node *prev;
 } Node;
@@ -43,7 +45,7 @@ void *malloc(size_t size){
 typedef void (*orig_free)(void *ptr);
 
 void free(void *ptr){
-
+  printf("%s", "Calling free()\n");
   orig_free original_free;
   original_free = (orig_free)dlsym(RTLD_NEXT, "free");
   return original_free(ptr);
@@ -61,7 +63,7 @@ void free(void *ptr){
  */
 void dumpPage(void *addr, int direction){
 
-	int pageInfo = (int) addr;
+	uintptr_t pageInfo = (uintptr_t) addr;
 	if (direction == 1) pageInfo = pageInfo & INBOUND_MASK;
 
 	FILE *file = fopen("Page_Dump.txt", "a");
@@ -86,7 +88,7 @@ void movePage(void *addr, int direction){
 		// create new Node, insert it into the position of the 
 		// current least recently added Node, and update
 		Node n;
-		n.pageNumber = (int)addr;
+		n.pageNumber = (uintptr_t)addr;
 		n.next = leastRecentHOT.next;
 		n.prev = leastRecentHOT.prev;
 		leastRecentHOT = *n.next;
@@ -129,11 +131,11 @@ int mprotect(void *addr, size_t len, int prot){
  * that page to the hot set
  */
 void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
-	void *mem_address = info->si_addr;
-	void *page_addr = (void *)((int)mem_address & PAGEBASE_MASK);
-	int page_num = PAGENUM((int)mem_address);
+        uintptr_t mem_address = (uintptr_t)(info->si_addr);
+	uintptr_t page_addr = (uintptr_t)(mem_address & PAGEBASE_MASK);
+	int page_num = PAGENUM(mem_address);
 
-	mprotect(page_addr, PAGE_SIZE, PROT_NONE);
+	mprotect((void *)page_addr, PAGE_SIZE, PROT_NONE);
 
 }
 
@@ -146,7 +148,7 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
  */
 void createQueue(int size){
 	int i = 0;
-	for (int i; i<size-1; ++i){
+	for (i; i<size-1; ++i){
 		INIT_NODE(n);
 		if (leastRecentHOT.pageNumber == 0){
 			mostRecentHOT = n;
@@ -166,6 +168,7 @@ void createQueue(int size){
 /*
  * Runs when the library is linked and sets up the SIGSEGV handling and queue
  */
+__attribute__((constructor))
 void _init_(){
 
 	struct sigaction sigact;
