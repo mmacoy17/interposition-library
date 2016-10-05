@@ -204,23 +204,26 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
 int dumbSearchAlgo(void *addr){
 	uintptr_t pageNum = PAGENUM((uintptr_t)addr);
 	int i;
-	Node *currentNode = leastRecentHOT;
+	Node *currentNode = &leastRecentHOT;
 	for (i=0; i<queueSizeHOT; ++i){
 		if (pageNum == currentNode->pageNumber){
 			return 1;
 		}
 		else{
-		  currentNode = currentNode.next;       // TODO also causing seg faults
+		  currentNode = currentNode->next;               // TODO also causing seg faults
+		  printf("%p \n", currentNode);       
 		}
 	}
+	printf("%s", "End of Loop\n");
+	return 2; // TODO remove after testing
 	// here if the node does not exist in HOT
-	currentNode = headCOLD;
-	while (currentNode.next != NULL){
-		if (pageNum == currentNode.pageNumber){
+	currentNode = &headCOLD;
+	while (currentNode->next != NULL){
+		if (pageNum == currentNode->pageNumber){
 			return 0;
 		}
 		else{
-			currentNode = *currentNode.next;
+			currentNode = currentNode->next;
 		}
 	}
 	return -1;
@@ -235,15 +238,15 @@ int dumbSearchAlgo(void *addr){
  */
 void createQueue(int size){
 	int i;
-	for (i=0; i<size; ++i){
-		printf("%s %d\n", "Created Node: ", i+1);
+	for (i=0; i<size; ++i){		
 		INIT_NODE(n);
-		if (leastRecentHOT.pageNumber == 0){
+		if (i == 0){
 			mostRecentHOT = n;
 			leastRecentHOT = n;
 			//TODO Need to edit .next and .prev fields to point to self?
 		}
 		else{
+		  printf("%s %d\n", "Created Node: ", i+1);
 			n.prev = &mostRecentHOT;
 			mostRecentHOT.next = &n;
 			mostRecentHOT = n;
