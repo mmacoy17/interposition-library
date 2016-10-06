@@ -127,7 +127,7 @@ void dumpPage(void *addr, int direction){
 // TODO create a hash map of elements that are in the cold queue
 // 0 indicates moving out of the HOT queue, 1 indicates moving in
 void movePage(void *addr, int direction, Node *node){
-  printf("%s %p, %d\n", "Called with the parameters: ", addr, direction);
+  printf("%s %p, %d\n", "movePage() called with the parameters: ", addr, direction);
 	if (direction == 1){
      
 		// start by moving what is in the needed spot to the cold queue
@@ -135,7 +135,7 @@ void movePage(void *addr, int direction, Node *node){
 
 		// use new Node, insert it into the position of the 
 		// current least recently added Node, and update
-		node->pageNumber = (uintptr_t)addr >> 12;	  // TODO make sure consistent use and non use of offset
+		*node->pageNumber = (uintptr_t)addr >> 12;	  // TODO make sure consistent use and non use of offset
 		node->next = leastRecentHOT->next;
 		node->prev = leastRecentHOT->prev;
 		leastRecentHOT = node->next;         
@@ -162,6 +162,7 @@ void movePage(void *addr, int direction, Node *node){
 	// TODO is this really a copy?
 	else{
 		Node n = *leastRecentHOT;
+		printf("%s %lu\n", "Page number moving to COLD is: ", n.pageNumber);
 		if(n.pageNumber != 0){
 		  n.next = headCOLD.next;
 		  if (headCOLD.next != NULL)
@@ -169,6 +170,12 @@ void movePage(void *addr, int direction, Node *node){
 		  headCOLD.next = &n;
 		  n.prev = &headCOLD;
 		  queueSizeCOLD++;
+		  
+		  //sanitize to make sure addr is page aligned
+		  uintptr_t page = (uintptr_t)addr >> 12;
+		  page = page << 12;
+		  //protect this page to induce a SIGSEGV signal when referenced
+		  mprotect((void *)page, PAGE_SIZE, PROT_NONE);
 		}
 	}
 
@@ -179,13 +186,12 @@ void movePage(void *addr, int direction, Node *node){
 typedef int (*orig_mprotect)(void *addr, size_t len, int prot);
 
 int mprotect(void *addr, size_t len, int prot){
-  int temp = 0;
-  if (prot == PROT_NONE) temp = 1;
-  printf("Protecting page %lu, %d \n", ((uintptr_t)addr >> 12), temp);
 
-	// 0 indicates moving out of the HOT queue, 1 indicates moving in
-	int direction = 0;
-	if (prot == PROT_NONE) direction = 1;
+  // 0 indicates moving out of the HOT queue, 1 indicates moving in
+  int direction = 0;
+  if (prot == PROT_READ | PROT_WRITE) direction = 1;
+  printf("mprotect() on page %lu, direction: %d \n", ((uintptr_t)addr >> 12), direction);
+
 	Node *node = NULL;
 	if (direction == 1){
 	  node = malloc(sizeof(Node));
@@ -211,9 +217,8 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
   printf("%s %p,   %d\n", "SIGSEGV fault called on: ", info->si_addr, temp);   //TODO remove after testing
         uintptr_t mem_address = (uintptr_t)(info->si_addr);
 	uintptr_t page_addr = (uintptr_t)(mem_address & PAGEBASE_MASK);
-	//int page_num = PAGENUM(mem_address);
 
-	mprotect((void *)page_addr, PAGE_SIZE, PROT_NONE);
+	mprotect((void *)page_addr, PAGE_SIZE, PROT_READ | PROT_WRITE);
 
 }
 
@@ -223,7 +228,7 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
  * -1 if it does not exist at all.
  */
 int dumbSearchAlgo(void *addr){
-  printf("%s %p\n", "The location from malloc is: ", addr);
+  printf("%s %p\n", "The location for search algo is: ", addr);
 	uintptr_t pageNum = PAGENUM((uintptr_t)addr);
 	printf("%s %lu\n", "The associated page number is: ", pageNum);
 	int i;
@@ -233,26 +238,23 @@ int dumbSearchAlgo(void *addr){
 	    printf("%s", "IT WORKED!");   	
 	    return 1;
 	  }
-	  else{
-	    printf("%p \n", currentNode); 
+	  else{ 
 	    currentNode = currentNode->next;              
          
 	  }
 	}
 	// here if the node does not exist in HOT
 	currentNode = headCOLD.next;
+	printf("%s %d\n", "Number of nodes in COLD: ", queueSizeCOLD);
         for(i=0; i<queueSizeCOLD; ++i){
 		if (pageNum == currentNode->pageNumber){
-		    printf("%s", "Made it into if\n");
 		    return 0;
 		}
 		else{
-		    printf("%s", "Post if\n");
 		    currentNode = currentNode->next;
-		    printf("%p \n", currentNode); 
 		}
 	}
-	printf("%s", "Returning -1 to malloc\n");
+	printf("%s", "Returning -1 from search algo\n");
 	return -1;
 }
 
