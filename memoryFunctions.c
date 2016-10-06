@@ -46,7 +46,7 @@ int SETUP_FINISHED = 0;
 
 
 int dumbSearchAlgo(void *);
-void movePage(void *, int);
+void movePage(void *, int, Node *);
 
 //============================= MEMORY MANAGEMENT =============================
 
@@ -73,7 +73,9 @@ void *malloc(size_t size){
   }
   else{
   	// New page. Must create node, and add to HOT queue
-  	movePage(location, 1);
+        // TODO could lose track of this page if not in queue?
+        Node *node = original_malloc(sizeof(Node));
+  	movePage(location, 1, node);
   }
   return location;
 }
@@ -124,28 +126,26 @@ void dumpPage(void *addr, int direction){
 
 // TODO create a hash map of elements that are in the cold queue
 // 0 indicates moving out of the HOT queue, 1 indicates moving in
-void movePage(void *addr, int direction){
+void movePage(void *addr, int direction, Node *node){
   printf("%s %p, %d\n", "Called with the parameters: ", addr, direction);
 	if (direction == 1){
      
 		// start by moving what is in the needed spot to the cold queue
-		movePage(NULL, 0);
+	        movePage(NULL, 0, NULL);
 
-		// create new Node, insert it into the position of the 
+		// use new Node, insert it into the position of the 
 		// current least recently added Node, and update
-		Node *n = malloc(sizeof(Node));
-		printf("%s %p", "Malloc in movePage() at loc: ", n);
-		n->pageNumber = (uintptr_t)addr >> 12;		// TODO make sure consistent use and non use of offset
-		n->next = leastRecentHOT->next;
-		n->prev = leastRecentHOT->prev;
-		leastRecentHOT = n->next;         
-		mostRecentHOT = n;
+		node->pageNumber = (uintptr_t)addr >> 12;	  // TODO make sure consistent use and non use of offset
+		node->next = leastRecentHOT->next;
+		node->prev = leastRecentHOT->prev;
+		leastRecentHOT = node->next;         
+		mostRecentHOT = node;
 		
 		if (dumbSearchAlgo(addr) == 0){
 			Node currentNode = headCOLD;
 			int found = 0;
 			while (currentNode.next != NULL && !found){
-				if (n->pageNumber == currentNode.pageNumber){
+				if (node->pageNumber == currentNode.pageNumber){
 					found = 1;
 				}
 				else{
@@ -186,10 +186,14 @@ int mprotect(void *addr, size_t len, int prot){
 	// 0 indicates moving out of the HOT queue, 1 indicates moving in
 	int direction = 0;
 	if (prot == PROT_NONE) direction = 1;
+	Node *node = NULL;
+	if (direction == 1){
+	  node = malloc(sizeof(Node));
+	}
 
 	// dumps contents of page and moves within queues
 	dumpPage(addr, direction);
-	movePage(addr, direction);
+	movePage(addr, direction, node);
 	
 
 	orig_mprotect original_mprotect;
