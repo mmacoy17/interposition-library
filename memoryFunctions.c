@@ -232,26 +232,29 @@ int dumbSearchAlgo(void *addr){
 	uintptr_t pageNum = PAGENUM((uintptr_t)addr);
 	printf("%s %lu\n", "The associated page number is: ", pageNum);
 	int i;
-	Node currentNode = leastRecentHOT;
+	Node *currentNode = &leastRecentHOT;
 	for (i=0; i<queueSizeHOT; ++i){
-	  if (pageNum == currentNode.pageNumber){
+	  printf("%s %lu\n", "Comparing page number", currentNode->pageNumber);
+	  if (pageNum == currentNode->pageNumber){
 	    printf("%s", "IT WORKED!");   	
 	    return 1;
 	  }
 	  else{ 
-	    currentNode = *currentNode.next;              
+	    currentNode = currentNode->next;
+	    printf("%s\n", "Made it past next element");
          
 	  }
 	}
 	// here if the node does not exist in HOT
-	currentNode = *headCOLD.next;
+	printf("%s\n", "Out of HOT search");
+	currentNode = headCOLD.next;
 	printf("%s %d\n", "Number of nodes in COLD: ", queueSizeCOLD);
         for(i=0; i<queueSizeCOLD; ++i){
-		if (pageNum == currentNode.pageNumber){
+		if (pageNum == currentNode->pageNumber){
 		    return 0;
 		}
 		else{
-		    currentNode = *currentNode.next;
+		    currentNode = currentNode->next;
 		}
 	}
 	printf("%s", "Returning -1 from search algo\n");
