@@ -31,8 +31,8 @@ typedef struct Node {
 
 // used to track the HOT queue
 int queueSizeHOT;
-Node *leastRecentHOT;	        // oldest member of the queue
-Node *mostRecentHOT;		// newest member of the queue
+Node leastRecentHOT;	        // oldest member of the queue
+Node mostRecentHOT;		// newest member of the queue
 
 // used to track the COLD queue
 Node headCOLD; 			//haha
@@ -135,11 +135,11 @@ void movePage(void *addr, int direction, Node *node){
 
 		// use new Node, insert it into the position of the 
 		// current least recently added Node, and update
-		*node->pageNumber = (uintptr_t)addr >> 12;	  // TODO make sure consistent use and non use of offset
-		node->next = leastRecentHOT->next;
-		node->prev = leastRecentHOT->prev;
-		leastRecentHOT = node->next;         
-		mostRecentHOT = node;
+		node->pageNumber = (uintptr_t)addr >> 12;	  // TODO make sure consistent use and non use of offset
+		node->next = leastRecentHOT.next;
+		node->prev = leastRecentHOT.prev;
+		leastRecentHOT = *node->next;         
+		mostRecentHOT = *node;
 		
 		if (dumbSearchAlgo(addr) == 0){
 			Node currentNode = headCOLD;
@@ -161,7 +161,7 @@ void movePage(void *addr, int direction, Node *node){
 	// move a copy of leastRecentHOT to the front of the COLD queue
 	// TODO is this really a copy?
 	else{
-		Node n = *leastRecentHOT;
+		Node n = leastRecentHOT;
 		printf("%s %lu\n", "Page number moving to COLD is: ", n.pageNumber);
 		if(n.pageNumber != 0){
 		  n.next = headCOLD.next;
@@ -189,7 +189,7 @@ int mprotect(void *addr, size_t len, int prot){
 
   // 0 indicates moving out of the HOT queue, 1 indicates moving in
   int direction = 0;
-  if (prot == PROT_READ | PROT_WRITE) direction = 1;
+  if (prot == (PROT_READ | PROT_WRITE)) direction = 1;
   printf("mprotect() on page %lu, direction: %d \n", ((uintptr_t)addr >> 12), direction);
 
 	Node *node = NULL;
@@ -218,7 +218,7 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
         uintptr_t mem_address = (uintptr_t)(info->si_addr);
 	uintptr_t page_addr = (uintptr_t)(mem_address & PAGEBASE_MASK);
 
-	mprotect((void *)page_addr, PAGE_SIZE, PROT_READ | PROT_WRITE);
+	mprotect((void *)page_addr, PAGE_SIZE, (PROT_READ | PROT_WRITE));
 
 }
 
@@ -232,26 +232,26 @@ int dumbSearchAlgo(void *addr){
 	uintptr_t pageNum = PAGENUM((uintptr_t)addr);
 	printf("%s %lu\n", "The associated page number is: ", pageNum);
 	int i;
-	Node *currentNode = leastRecentHOT;
+	Node currentNode = leastRecentHOT;
 	for (i=0; i<queueSizeHOT; ++i){
-	  if (pageNum == currentNode->pageNumber){
+	  if (pageNum == currentNode.pageNumber){
 	    printf("%s", "IT WORKED!");   	
 	    return 1;
 	  }
 	  else{ 
-	    currentNode = currentNode->next;              
+	    currentNode = *currentNode.next;              
          
 	  }
 	}
 	// here if the node does not exist in HOT
-	currentNode = headCOLD.next;
+	currentNode = *headCOLD.next;
 	printf("%s %d\n", "Number of nodes in COLD: ", queueSizeCOLD);
         for(i=0; i<queueSizeCOLD; ++i){
-		if (pageNum == currentNode->pageNumber){
+		if (pageNum == currentNode.pageNumber){
 		    return 0;
 		}
 		else{
-		    currentNode = currentNode->next;
+		    currentNode = *currentNode.next;
 		}
 	}
 	printf("%s", "Returning -1 from search algo\n");
@@ -281,18 +281,18 @@ void createQueue(int size){
 	  Node *n = malloc(sizeof(Node));
 	  initNode(n);
 		if (i == 0){
-			mostRecentHOT = n;
-			leastRecentHOT = n;
+			mostRecentHOT = *n;
+			leastRecentHOT = *n;
 			//TODO Need to edit .next and .prev fields to point to self?
 		}
 		else{
-			n->prev = mostRecentHOT;
-			mostRecentHOT->next = n;
-			mostRecentHOT = n;
+			n->prev = &mostRecentHOT;
+			mostRecentHOT.next = n;
+			mostRecentHOT = *n;
 		}
 	}
-	mostRecentHOT->next = leastRecentHOT;
-	leastRecentHOT->prev = mostRecentHOT;
+	mostRecentHOT.next = &leastRecentHOT;
+	leastRecentHOT.	prev = &mostRecentHOT;
 }
 
 /*
