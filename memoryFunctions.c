@@ -31,8 +31,8 @@ typedef struct Node {
 
 // used to track the HOT queue
 int queueSizeHOT;
-Node leastRecentHOT;	        // oldest member of the queue
-Node mostRecentHOT;		// newest member of the queue
+Node *leastRecentHOT;	    // oldest member of the queue
+Node *mostRecentHOT;		// newest member of the queue
 
 // used to track the COLD queue
 Node headCOLD; 			//haha
@@ -136,10 +136,10 @@ void movePage(void *addr, int direction, Node *node){
 		// use new Node, insert it into the position of the 
 		// current least recently added Node, and update
 		node->pageNumber = (uintptr_t)addr >> 12;	  // TODO make sure consistent use and non use of offset
-		node->next = leastRecentHOT.next;
-		node->prev = leastRecentHOT.prev;
-		leastRecentHOT = *node->next;         
-		mostRecentHOT = *node;
+		node->next = leastRecentHOT->next;
+		node->prev = leastRecentHOT->prev;
+		leastRecentHOT = node->next;         
+		mostRecentHOT = node;
 		
 		if (dumbSearchAlgo(addr) == 0){
 			Node currentNode = headCOLD;
@@ -161,7 +161,7 @@ void movePage(void *addr, int direction, Node *node){
 	// move a copy of leastRecentHOT to the front of the COLD queue
 	// TODO is this really a copy?
 	else{
-		Node n = leastRecentHOT;
+		Node n = *leastRecentHOT;
 		printf("%s %lu\n", "Page number moving to COLD is: ", n.pageNumber);
 		if(n.pageNumber != 0){
 		  n.next = headCOLD.next;
@@ -232,7 +232,7 @@ int dumbSearchAlgo(void *addr){
 	uintptr_t pageNum = PAGENUM((uintptr_t)addr);
 	printf("%s %lu\n", "The associated page number is: ", pageNum);
 	int i;
-	Node *currentNode = &leastRecentHOT;
+	Node *currentNode = leastRecentHOT;
 	for (i=0; i<queueSizeHOT; ++i){
 	  printf("%s %lu\n", "Comparing page number", currentNode->pageNumber);
 	  if (pageNum == currentNode->pageNumber){
@@ -284,18 +284,18 @@ void createQueue(int size){
 	  Node *n = malloc(sizeof(Node));
 	  initNode(n);
 		if (i == 0){
-			mostRecentHOT = *n;
-			leastRecentHOT = *n;
+			mostRecentHOT = n;
+			leastRecentHOT = n;
 			//TODO Need to edit .next and .prev fields to point to self?
 		}
 		else{
-			n->prev = &mostRecentHOT;
-			mostRecentHOT.next = n;
-			mostRecentHOT = *n;
+			n->prev = mostRecentHOT;
+			mostRecentHOT->next = n;
+			mostRecentHOT = n;
 		}
 	}
-	mostRecentHOT.next = &leastRecentHOT;
-	leastRecentHOT.	prev = &mostRecentHOT;
+	mostRecentHOT->next = leastRecentHOT;
+	leastRecentHOT->prev = mostRecentHOT;
 }
 
 /*
