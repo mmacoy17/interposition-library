@@ -111,7 +111,7 @@ void dumpPage(void *addr, int direction){
 	}
 	if (direction == 1) pageInfo = pageInfo & INBOUND_MASK;
 
-	FILE *file = fopen("Page_Dump.txt", "a");
+	FILE *file = fopen("Page_Dump.txt", "a"); //TODO add to init
 
 	// write the page number, and direction of queue movement
 	fwrite((void *)pageInfo, 1, 8, file);
@@ -120,7 +120,7 @@ void dumpPage(void *addr, int direction){
 	fwrite(addr, 1, PAGE_SIZE, file);
 
 	//close the file
-	fclose(file);
+	fclose(file); // TODO add to atClose
 
 }
 
