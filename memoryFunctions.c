@@ -7,6 +7,8 @@
 #include <signal.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define PAGE_SIZE 4096
 #define OFFSET_MASK 0xfff
@@ -54,7 +56,7 @@ int queueSizeCOLD = 0;
 //int SETUP_FINISHED = 0;
 
 //File for page dumps
-FILE *file;
+int file;
 
 
 //============================ METHOD DECLARATIONS ============================
@@ -131,11 +133,11 @@ void dumpPage(void *addr, int direction){
 
 	// write the page number, and direction of queue movement
 	void *pageAddr = (void *)((uintptr_t)pageNumber << 12);
-	//fwrite(pageAddr, sizeof(void *), 1, file);
+	write(file, pageAddr, (size_t)sizeof(void *));
 
 	printf("%s\n", "Past first write");
 	// write the contents of the page
-	//fwrite(addr, 1, PAGE_SIZE, file);
+	write(file, pageAddr, (size_t)PAGE_SIZE);
 
 
 }
@@ -433,7 +435,8 @@ void createQueue(int size){
  */
 __attribute__((constructor))
 void _init_(){
-
+  //Do not use f prefix
+  //doxygen
 	// set up the SIGSEGV handling
 	struct sigaction sigact;
 	sigact.sa_flags = SA_SIGINFO;
@@ -454,7 +457,7 @@ void _init_(){
 	//createQueue(queueSizeHOT);
 	//initNode(&headCOLD);
 
-	file = fopen("Page_Dump.txt", "a");
+	file = open("Page_Dump.txt", (O_RDWR | O_APPEND | O_CREAT)); //use open() and write(), returns int
 
 	//SETUP_FINISHED = 1;
 }
@@ -462,7 +465,7 @@ void _init_(){
 __attribute__((destructor))
 void _atClose_(){
 	//close the file
-	fclose(file);
+	close(file);
 }
 
 
