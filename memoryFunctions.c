@@ -46,7 +46,6 @@ int *queueCOLDb;
 // used to track the HOT queue
 Node *leastRecentHOT;	    // oldest member of the queue
 Node *mostRecentHOT;		// newest member of the queue
-
 // used to track the COLD queue
 Node headCOLD; 			//haha
 int queueSizeCOLD = 0;
@@ -151,7 +150,6 @@ void movePage(void *addr, int direction, Node *node){
      
 		// start by moving what is in the needed spot to the cold queue
 	    movePage(NULL, 0, NULL);
-
 		// use new Node, insert it into the position of the 
 		// current least recently added Node, and update
 		node->pageNumber = (uintptr_t)addr >> 12;	  // TODO make sure consistent use and non use of offset
@@ -197,9 +195,7 @@ void movePage(void *addr, int direction, Node *node){
 		  mprotect((void *)page, PAGE_SIZE, PROT_NONE);
 		}
 	}
-
 }
-
 */
 
 int bumpBackCold(){
@@ -467,8 +463,3 @@ void _atClose_(){
 	//close the file
 	close(file);
 }
-
-
-
-
-
