@@ -102,10 +102,10 @@ void *malloc(size_t size){
 typedef void (*orig_free)(void *ptr);
 
 void free(void *ptr){
-  printf("%s", "Calling free()\n");
+  //printf("%s", "Calling free()\n");
   orig_free original_free;
   original_free = (orig_free)dlsym(RTLD_NEXT, "free");
-  printf("%s", "Calling free() end\n");
+  //printf("%s", "Calling free() end\n");
   return original_free(ptr);
 }
 
@@ -124,19 +124,23 @@ void free(void *ptr){
 void dumpPage(void *addr, int direction){
   printf("%s %p, %d\n", "dumpPage addr and direction: ", addr, direction);
 	uintptr_t pageNumber = (uintptr_t) PAGENUM((uintptr_t)addr);
-	printf("%s %lu\n", "Inside dumpPage(), ", pageNumber);
+	//printf("%s %lu\n", "Inside dumpPage(), ", pageNumber);
 	if (pageNumber == 0){
 		return;	// Do not dump if it is an empty page
 	}
-	if (direction == 1) pageNumber = pageNumber & INBOUND_MASK;
+	if (direction == 1) pageNumber = pageNumber | INBOUND_MASK;
 
 	// write the page number, and direction of queue movement
 	void *pageAddr = (void *)((uintptr_t)pageNumber << 12);
-	write(file, pageAddr, (size_t)sizeof(void *));
+	void *pageNumPtr = &pageNumber;
+	void *pageAddrPtr = &pageAddr;
 
-	printf("%s\n", "Past first write");
+	//printf("%p    %p   \n", (void *)pageNumber, pageNumPtr);
+	write(file, pageNumPtr, sizeof(pageNumPtr));
+
+	//printf("%s\n", "Past first write");
 	// write the contents of the page
-	write(file, pageAddr, (size_t)PAGE_SIZE);
+	//write(file, pageAddr, (size_t)PAGE_SIZE);
 
 
 }
@@ -247,7 +251,7 @@ int locateAndRemove(int number){
  * parameter addr is the address of the page not the page number
  */
 void movePage(void *addr, int direction){
-  printf("%s %p, %d\n", "movePage() called with the parameters: ", addr, direction);
+  //printf("%s %p, %d\n", "movePage() called with the parameters: ", addr, direction);
 
 	if (direction == 1){
 		// start by clearing out the spot
@@ -260,10 +264,14 @@ void movePage(void *addr, int direction){
 
 		// overwrite the front of the queue and increment
 		*queueHOTf = (int)((uintptr_t)addr >> 12);
-		queueHOTf = ((((int)(uintptr_t)&queueHOTf + sizeof(int)))%(sizeof(int)*queueSizeHOT))+mem;
+		// TODO is this overwriting in the statics area?
+		queueHOTf = ((((int)(uintptr_t)queueHOTf - (int)(uintptr_t)mem) / sizeof(int) + 1)%(queueSizeHOT))+mem;
+		//printf("%s  %p    %p    %d    %p\n", "The locations are: ", queueHOTf, ((((int)(uintptr_t)queueHOTf - (int)(uintptr_t)mem) / sizeof(int) + 1)%(queueSizeHOT))+mem, (queueSizeHOT), mem);
+		//printf("%s   %lu\n", "Amount to be added: ",((((int)(uintptr_t)queueHOTf - (int)(uintptr_t)mem) + sizeof(int))%(sizeof(int)*queueSizeHOT)));
+		// TODO is it because incrementing increments by sizeof(int) given it is an array of ints????
 	}
 	else{
-	  printf("%s %d\n", "The page number being evicted is: ", *queueHOTf);
+	  //printf("%s %d\n", "The page number being evicted is: ", *queueHOTf);
 		if(*queueHOTf != 0){
 			//TODO handle mmap buffer overflow?
 			bumpBackCold();			
@@ -271,9 +279,9 @@ void movePage(void *addr, int direction){
 			uintptr_t addressOfPage = ((uintptr_t)*queueHOTf) << 12;
 		      
 			//protect this page to induce a SIGSEGV signal when referenced
-			printf("%s %p\n", "Protecting: ", (void *)addressOfPage);
+			//printf("%s %p\n", "Protecting: ", (void *)addressOfPage);
 			mprotect((void *)addressOfPage, PAGE_SIZE, PROT_NONE);
-			printf("%s\n", "Made it to the end of eviction");
+			//printf("%s\n", "Made it to the end of eviction");
 		}
 	}
 }
@@ -288,7 +296,7 @@ int mprotect(void *addr, size_t len, int prot){
   // 0 indicates moving out of the HOT queue, 1 indicates moving in
   int direction = 0;
   if (prot == (PROT_READ | PROT_WRITE)) direction = 1;
-  printf("mprotect() on addr %lu, direction: %d \n", ((uintptr_t)addr /*>> 12*/), direction);
+  //printf("mprotect() on addr %lu, direction: %d \n", ((uintptr_t)addr /*>> 12*/), direction);
 
 	/*Node *node = NULL;
 	if (direction == 1){
@@ -299,7 +307,7 @@ int mprotect(void *addr, size_t len, int prot){
 	dumpPage(addr, direction);
 	//movePage(addr, direction);
 	
-	printf("%s\n", "Done with dumpPage()");
+	//printf("%s\n", "Done with dumpPage()");
 	orig_mprotect original_mprotect;
 	original_mprotect = (orig_mprotect)dlsym(RTLD_NEXT, "mprotect");
 	return original_mprotect(addr, len, prot);
@@ -312,7 +320,7 @@ int mprotect(void *addr, size_t len, int prot){
 void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
   int temp = 0;
   if (info->si_code == SEGV_MAPERR) temp = -1;
-  printf("%s %p,   %d\n", "SIGSEGV fault called on: ", info->si_addr, temp);   //TODO remove after testing
+  //printf("%s %p,   %d\n", "SIGSEGV fault called on: ", info->si_addr, temp);   //TODO remove after testing
         uintptr_t mem_address = (uintptr_t)(info->si_addr);
 	uintptr_t page_addr = (uintptr_t)(mem_address & PAGEBASE_MASK);
 
@@ -370,7 +378,7 @@ int dumbSearchAlgo(void *addr){
 	for (i=0; i<queueSizeHOT; i++){
 		if(*location == pageNum)
 			return 1;
-		location++;
+		location = ((((int)(uintptr_t)location - (int)(uintptr_t)mem) / sizeof(int) + 1)%(queueSizeHOT))+mem;
 	}
 
 	// return 0 if in COLD
@@ -453,7 +461,7 @@ void _init_(){
 	//createQueue(queueSizeHOT);
 	//initNode(&headCOLD);
 
-	file = open("Page_Dump.txt", (O_RDWR | O_APPEND | O_CREAT)); //use open() and write(), returns int
+	file = open("Page_Dump_Two.txt", (O_RDWR | O_APPEND | O_CREAT), (S_IRUSR | S_IWUSR)); //use open() and write(), returns int
 
 	//SETUP_FINISHED = 1;
 }
