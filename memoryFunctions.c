@@ -140,7 +140,7 @@ void dumpPage(void *addr, int direction){
 
 	//printf("%s\n", "Past first write");
 	// write the contents of the page
-	//write(file, pageAddr, (size_t)PAGE_SIZE);
+	write(file, pageAddr, (size_t)PAGE_SIZE);
 
 
 }
