@@ -71,14 +71,18 @@ int main(int argc, char *argv[]){
 		return -2;
 	}
 
-	while (fread(src_buf, sizeof(MM_word), WORDS_PER_PAGE, file) == WORDS_PER_PAGE){
+	int holder;
+	int count = 0;
+	while ((holder = fread(src_buf, sizeof(MM_word), WORDS_PER_PAGE, file)) == WORDS_PER_PAGE){
 		dest_end = test.compress(src_buf, dest_buf, WORDS_PER_PAGE);
 		size = (dest_end - dest_buf) * sizeof(MM_word);
 		printf("Compressed %d bytes to %d bytes\n", 4096, size);
 		udest_end = test.decompress(dest_buf, udest_buf);
 		size = (udest_end - udest_buf) * sizeof(MM_word);
 		printf("Decompressed back to %d bytes\n", size);
+		count++;
 	}
+	printf("%d  %d\n", holder, count);
 
 /*
 	for (i = 0; i < WORDS_PER_PAGE; ++i) {
