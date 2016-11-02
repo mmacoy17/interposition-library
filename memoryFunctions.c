@@ -16,22 +16,7 @@
 #define PAGENUM(addr) (addr & PAGEBASE_MASK) >> 12
 #define INBOUND_MASK 0x8000000000000000
 
-/*
- * Each queue (hot and cold) is designed to be made up of Nodes
- *
- * The next field holds the element added to the list immediately
- * AFTER the current Node
- *
- * The prev field holds the element added to the list immediately
- * BEFORE the currrent Node
- */
-/*
-typedef struct Node {
-	uintptr_t pageNumber;
-	struct Node *next;
-	struct Node *prev;
-} Node;
-*/
+
 
 int queueSizeHOT;
 
@@ -42,17 +27,6 @@ int *queueHOTf;
 int *queueCOLDf;
 int *queueCOLDb;
 
-/*
-// used to track the HOT queue
-Node *leastRecentHOT;	    // oldest member of the queue
-Node *mostRecentHOT;		// newest member of the queue
-// used to track the COLD queue
-Node headCOLD; 			//haha
-int queueSizeCOLD = 0;
-*/
-
-// used to tell malloc to start intervening
-//int SETUP_FINISHED = 0;
 
 //File for page dumps
 int file;
@@ -78,19 +52,14 @@ void *malloc(size_t size){
   original_malloc = (orig_malloc)dlsym(RTLD_NEXT, "malloc");
   void *location = original_malloc(size);
 
-  /*if (!SETUP_FINISHED){
-    return location;
-  }*/
 
   int check = dumbSearchAlgo(location);
   if (check >= 0){
-  	// Node was either in the HOT queue already, or just put there by mprotect()
+  	// Page was either in the HOT queue already, or just put there by mprotect()
   	return location;
   }
   else{
   	// New page. Must add to HOT queue
-        // TODO could lose track of this page if not in queue?
-        //Node *node = original_malloc(sizeof(Node));
   	movePage(location, 1);
   }
   return location;
@@ -102,10 +71,8 @@ void *malloc(size_t size){
 typedef void (*orig_free)(void *ptr);
 
 void free(void *ptr){
-  //printf("%s", "Calling free()\n");
   orig_free original_free;
   original_free = (orig_free)dlsym(RTLD_NEXT, "free");
-  //printf("%s", "Calling free() end\n");
   return original_free(ptr);
 }
 
@@ -115,7 +82,7 @@ void free(void *ptr){
 
 /*
  * Takes the contents of a page being moved in or out of the hot
- * set and dumps it, preceeded by the page number and direction
+ * queue and dumps it, preceeded by the page number and direction
  * of movement within the queues, out to a set file. (Use env var later for file?)
  *
  * direction of 0 indicates moving out of the HOT queue, 1 indicates moving in
@@ -124,7 +91,6 @@ void free(void *ptr){
 void dumpPage(void *addr, int direction){
   printf("%s %p, %d\n", "dumpPage addr and direction: ", addr, direction);
 	uintptr_t pageNumber = (uintptr_t) PAGENUM((uintptr_t)addr);
-	//printf("%s %lu\n", "Inside dumpPage(), ", pageNumber);
 	if (pageNumber == 0){
 		return;	// Do not dump if it is an empty page
 	}
@@ -135,72 +101,13 @@ void dumpPage(void *addr, int direction){
 	void *pageNumPtr = &pageNumber;
 	void *pageAddrPtr = &pageAddr;
 
-	//printf("%p    %p   \n", (void *)pageNumber, pageNumPtr);
 	write(file, pageNumPtr, sizeof(pageNumPtr));
 
-	//printf("%s\n", "Past first write");
 	// write the contents of the page
 	write(file, pageAddrPtr, (size_t)PAGE_SIZE);
 
 
 }
-
-/*
-// TODO create a hash map of elements that are in the cold queue
-// 0 indicates moving out of the HOT queue, 1 indicates moving in
-void movePage(void *addr, int direction, Node *node){
-  printf("%s %p, %d\n", "movePage() called with the parameters: ", addr, direction);
-	if (direction == 1){
-     
-		// start by moving what is in the needed spot to the cold queue
-	    movePage(NULL, 0, NULL);
-		// use new Node, insert it into the position of the 
-		// current least recently added Node, and update
-		node->pageNumber = (uintptr_t)addr >> 12;	  // TODO make sure consistent use and non use of offset
-		node->next = leastRecentHOT->next;
-		node->prev = leastRecentHOT->prev;
-		leastRecentHOT = node->next;         
-		mostRecentHOT = node;
-		
-		if (dumbSearchAlgo(addr) == 0){
-			Node currentNode = headCOLD;
-			int found = 0;
-			while (currentNode.next != NULL && !found){
-				if (node->pageNumber == currentNode.pageNumber){
-					found = 1;
-				}
-				else{
-					currentNode = *currentNode.next;
-				}
-			}
-			// once found, remove from COLD queue
-			currentNode.prev->next = currentNode.next;
-			currentNode.next->prev = currentNode.prev;
-			queueSizeCOLD--;
-		}
-	}
-	// move a copy of leastRecentHOT to the front of the COLD queue
-	// TODO is this really a copy?
-	else{
-		Node n = *leastRecentHOT;
-		printf("%s %lu\n", "Page number moving to COLD is: ", n.pageNumber);
-		if(n.pageNumber != 0){
-		  n.next = headCOLD.next;
-		  if (headCOLD.next != NULL)
-		    headCOLD.next->prev = &n;
-		  headCOLD.next = &n;
-		  n.prev = &headCOLD;
-		  queueSizeCOLD++;
-		  
-		  //sanitize to make sure addr is page aligned
-		  uintptr_t page = (uintptr_t)addr >> 12;
-		  page = page << 12;
-		  //protect this page to induce a SIGSEGV signal when referenced
-		  mprotect((void *)page, PAGE_SIZE, PROT_NONE);
-		}
-	}
-}
-*/
 
 int bumpBackCold(){
 	int *addr = queueCOLDb;
@@ -266,28 +173,19 @@ void movePage(void *addr, int direction){
 		*queueHOTf = (int)((uintptr_t)addr >> 12);
 		// TODO is this overwriting in the statics area?
 		queueHOTf = ((((int)(uintptr_t)queueHOTf - (int)(uintptr_t)mem) / sizeof(int) + 1)%(queueSizeHOT))+mem;
-		//printf("%s  %p    %p    %d    %p\n", "The locations are: ", queueHOTf, ((((int)(uintptr_t)queueHOTf - (int)(uintptr_t)mem) / sizeof(int) + 1)%(queueSizeHOT))+mem, (queueSizeHOT), mem);
-		//printf("%s   %lu\n", "Amount to be added: ",((((int)(uintptr_t)queueHOTf - (int)(uintptr_t)mem) + sizeof(int))%(sizeof(int)*queueSizeHOT)));
-		// TODO is it because incrementing increments by sizeof(int) given it is an array of ints????
 	}
 	else{
-	  //printf("%s %d\n", "The page number being evicted is: ", *queueHOTf);
 		if(*queueHOTf != 0){
-			//TODO handle mmap buffer overflow?
 			bumpBackCold();			
 			*queueCOLDf = *queueHOTf;
 			uintptr_t addressOfPage = ((uintptr_t)*queueHOTf) << 12;
 		      
 			//protect this page to induce a SIGSEGV signal when referenced
-			//printf("%s %p\n", "Protecting: ", (void *)addressOfPage);
 			mprotect((void *)addressOfPage, PAGE_SIZE, PROT_NONE);
-			//printf("%s\n", "Made it to the end of eviction");
 		}
 	}
 }
 
-
-//TODO update for new queue type
 
 typedef int (*orig_mprotect)(void *addr, size_t len, int prot);
 
@@ -296,21 +194,14 @@ int mprotect(void *addr, size_t len, int prot){
   // 0 indicates moving out of the HOT queue, 1 indicates moving in
   int direction = 0;
   if (prot == (PROT_READ | PROT_WRITE)) direction = 1;
-  //printf("mprotect() on addr %lu, direction: %d \n", ((uintptr_t)addr /*>> 12*/), direction);
 
-	/*Node *node = NULL;
-	if (direction == 1){
-	  node = malloc(sizeof(Node));
-	}*/
 
-	// dumps contents of page and moves within queues
-	dumpPage(addr, direction);
-	//movePage(addr, direction);
-	
-	//printf("%s\n", "Done with dumpPage()");
-	orig_mprotect original_mprotect;
-	original_mprotect = (orig_mprotect)dlsym(RTLD_NEXT, "mprotect");
-	return original_mprotect(addr, len, prot);
+  // dumps contents of page and moves within queues
+  dumpPage(addr, direction);
+        
+  orig_mprotect original_mprotect;
+  original_mprotect = (orig_mprotect)dlsym(RTLD_NEXT, "mprotect");
+  return original_mprotect(addr, len, prot);
 }
 
 /* 
@@ -320,7 +211,6 @@ int mprotect(void *addr, size_t len, int prot){
 void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
   int temp = 0;
   if (info->si_code == SEGV_MAPERR) temp = -1;
-  //printf("%s %p,   %d\n", "SIGSEGV fault called on: ", info->si_addr, temp);   //TODO remove after testing
         uintptr_t mem_address = (uintptr_t)(info->si_addr);
 	uintptr_t page_addr = (uintptr_t)(mem_address & PAGEBASE_MASK);
 
@@ -330,44 +220,6 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
 }
 
 
-/*
- * Slow algorith that searches all of the existing pages and returns 1 if
- * the Node exists in the HOT queue, 0 if it exists in the COLD queue, and
- * -1 if it does not exist at all.
- */
-/*int dumbSearchAlgo(void *addr){
-  printf("%s %p\n", "The location for search algo is: ", addr);
-	uintptr_t pageNum = PAGENUM((uintptr_t)addr);
-	printf("%s %lu\n", "The associated page number is: ", pageNum);
-	int i;
-	Node *currentNode = leastRecentHOT;
-	for (i=0; i<queueSizeHOT; ++i){
-	  printf("%s %lu\n", "Comparing page number", currentNode->pageNumber);
-	  if (pageNum == currentNode->pageNumber){
-	    printf("%s", "IT WORKED!");   	
-	    return 1;
-	  }
-	  else{ 
-	    currentNode = currentNode->next;
-	    printf("%s\n", "Made it past next element");
-         
-	  }
-	}
-	// here if the node does not exist in HOT
-	printf("%s\n", "Out of HOT search");
-	currentNode = headCOLD.next;
-	printf("%s %d\n", "Number of nodes in COLD: ", queueSizeCOLD);
-        for(i=0; i<queueSizeCOLD; ++i){
-		if (pageNum == currentNode->pageNumber){
-		    return 0;
-		}
-		else{
-		    currentNode = currentNode->next;
-		}
-	}
-	printf("%s", "Returning -1 from search algo\n");
-	return -1;
-}*/
 
 int dumbSearchAlgo(void *addr){
 	int pageNum = (int)PAGENUM((uintptr_t)addr);
@@ -396,51 +248,13 @@ int dumbSearchAlgo(void *addr){
 
 //============================== INITIALIZATIONS ==============================
 
-/*
- * Acts as a constructor for Nodes
- * Sets the page number to zero and the pointers to NULL
- */
-/*
-void initNode(Node *n){
-  n->pageNumber = 0;
-  n->prev = NULL;
-  n->next = NULL;
-}*/
-
-/*
- * Initializes the HOT queue of Nodes of a specified size
- * Front of the queue is the least recently added Node
- */
-/*
-void createQueue(int size){
-	int i;
-	for (i=0; i<size; ++i){
-	  Node *n = malloc(sizeof(Node));
-	  initNode(n);
-		if (i == 0){
-			mostRecentHOT = n;
-			leastRecentHOT = n;
-			//TODO Need to edit .next and .prev fields to point to self?
-		}
-		else{
-			n->prev = mostRecentHOT;
-			mostRecentHOT->next = n;
-			mostRecentHOT = n;
-		}
-	}
-	mostRecentHOT->next = leastRecentHOT;
-	leastRecentHOT->prev = mostRecentHOT;
-}*/
-
-
 
 /*
  * Runs when the library is linked and sets up the SIGSEGV handling and queues
  */
 __attribute__((constructor))
 void _init_(){
-  //Do not use f prefix
-  //doxygen
+  //TODO doxygen
 	// set up the SIGSEGV handling
 	struct sigaction sigact;
 	sigact.sa_flags = SA_SIGINFO;
@@ -457,13 +271,9 @@ void _init_(){
 	queueCOLDb = queueCOLDf;
 
 
-	queueSizeHOT = strtol(getenv("QUEUE_SIZE"), NULL, 10);	
-	//createQueue(queueSizeHOT);
-	//initNode(&headCOLD);
+	queueSizeHOT = strtol(getenv("QUEUE_SIZE"), NULL, 10);
 
 	file = open("Page_Dump_Two.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR)); // took out the appending
-
-	//SETUP_FINISHED = 1;
 }
 
 __attribute__((destructor))

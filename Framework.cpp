@@ -89,20 +89,4 @@ int main(int argc, char *argv[]){
 		fread(addr, sizeof(MM_word), 1, file);
 	}
 	printf("****************Leftover bytes: %d  Number of pages: %d****************\n", holder, count);
-
-/*
-	for (i = 0; i < WORDS_PER_PAGE; ++i) {
-	  src_buf[i] = WORDS_PER_PAGE;
-	}
-	for (i = 0; i < WORDS_PER_PAGE; ++i) {
-	  udest_buf[i] = -1;
-	}
-
-	dest_end = test.compress(src_buf, dest_buf, 512);
-	size = (dest_end - dest_buf) * sizeof(MM_word);
-	printf("Compressed %d bytes to %d bytes\n", 4096, size);
-	udest_end = test.decompress(dest_buf, udest_buf);
-	size = (udest_end - udest_buf) * sizeof(MM_word);
-	printf("Decompressed back to %d bytes\n", size);
-	*/
 }
