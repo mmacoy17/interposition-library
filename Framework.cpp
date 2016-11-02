@@ -1,5 +1,7 @@
 #include <iostream>
 #include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
 
 using namespace std;
 
@@ -73,16 +75,20 @@ int main(int argc, char *argv[]){
 
 	int holder;
 	int count = 0;
+	MM_word *addr = (MM_word *)malloc(sizeof(MM_word));
+	fread(addr, sizeof(MM_word), 1, file);
 	while ((holder = fread(src_buf, sizeof(MM_word), WORDS_PER_PAGE, file)) == WORDS_PER_PAGE){
 		dest_end = test.compress(src_buf, dest_buf, WORDS_PER_PAGE);
 		size = (dest_end - dest_buf) * sizeof(MM_word);
+		printf("Page number and direction is: %lu\n", *addr);
 		printf("Compressed %d bytes to %d bytes\n", 4096, size);
 		udest_end = test.decompress(dest_buf, udest_buf);
 		size = (udest_end - udest_buf) * sizeof(MM_word);
 		printf("Decompressed back to %d bytes\n", size);
 		count++;
+		fread(addr, sizeof(MM_word), 1, file);
 	}
-	printf("%d  %d\n", holder, count);
+	printf("****************Leftover bytes: %d  Number of pages: %d****************\n", holder, count);
 
 /*
 	for (i = 0; i < WORDS_PER_PAGE; ++i) {

@@ -140,7 +140,7 @@ void dumpPage(void *addr, int direction){
 
 	//printf("%s\n", "Past first write");
 	// write the contents of the page
-	write(file, pageAddr, (size_t)PAGE_SIZE);
+	write(file, pageAddrPtr, (size_t)PAGE_SIZE);
 
 
 }
@@ -461,7 +461,7 @@ void _init_(){
 	//createQueue(queueSizeHOT);
 	//initNode(&headCOLD);
 
-	file = open("Page_Dump_Two.txt", (O_RDWR | O_APPEND | O_CREAT), (S_IRUSR | S_IWUSR)); //use open() and write(), returns int
+	file = open("Page_Dump_Two.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR)); // took out the appending
 
 	//SETUP_FINISHED = 1;
 }
