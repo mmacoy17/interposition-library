@@ -13,7 +13,7 @@ extern "C" {
 /*
  * Compile instructions:
  * g++ -c Framework.cpp -o Framework.o
- * gcc -c WK.c -o WK.o
+ * gcc -c -std=c99 WK.c -o WK.o
  * gcc -c -I. -I./lzo -s -Wall -O2 -fomit-frame-pointer minilzo.c -o minilzo.o
  * g++ -o Framework Framework.o WK.o minilzo.o
  */
@@ -107,15 +107,11 @@ WK_word * minilzoAlgo::compress(WK_word *src, WK_word *dst, unsigned int numWord
 
     src = (WK_word *)input_buf;
     dst = (WK_word *)output_buf;
-    //WK_word *dst_len = dst + (output_length/sizeof(lzo_bytep));
-    //printf("Cast to char results in dst: %p  dst+output_length: %p \n", dst, ((char *)dst + output_length));
     WK_word *dst_len =(WK_word *) ((char *)dst + output_length);
-    //printf("*dst_len:      %p\n", dst_len);
     return dst_len;
 }
 
 WK_word * minilzoAlgo::decompress(WK_word *src, WK_word *dst, unsigned int size){
-	//printf("SIZE:   %d\n", size);
 	lzo_bytep input_buf = (lzo_bytep)src;
 	lzo_bytep output_buf = (lzo_bytep)dst;
 	lzo_uint input_length = size;
@@ -172,8 +168,6 @@ int main(int argc, char *argv[]){
 	fread(addr, sizeof(WK_word), 1, file);
 	while ((holder = fread(src_buf, sizeof(WK_word), WORDS_PER_PAGE, file)) == WORDS_PER_PAGE){
 		dest_end = test.compress(src_buf, dest_buf, WORDS_PER_PAGE);
-		//printf("dest_end:   %p, size:    %ld\n", dest_end, (char *)dest_end - (char *)dest_buf);
-		//size = (dest_end - dest_buf) * sizeof(WK_word);
 		size = ((char *)dest_end - (char *)dest_buf);
 		printf("Page number and direction is: %llu\n", *addr);
 		printf("Compressed %d bytes to %d bytes\n", 4096, size);

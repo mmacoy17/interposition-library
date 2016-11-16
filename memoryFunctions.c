@@ -16,6 +16,14 @@
 #define PAGENUM(addr) (addr & PAGEBASE_MASK) >> 12
 #define INBOUND_MASK 0x8000000000000000
 
+/*
+ * To use:
+ * gcc -shared -fPIC memoryFunctions.c -o memoryFunctions.so -ldl
+ * bash
+ * export LD_PRELOAD = ./memoryFunctions.so
+ * export QUEUE_SIZE = ""
+ */
+
 
 
 int queueSizeHOT;
@@ -273,7 +281,7 @@ void _init_(){
 
 	queueSizeHOT = strtol(getenv("QUEUE_SIZE"), NULL, 10);
 
-	file = open("Page_Dump_Two.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR)); // took out the appending
+	file = open("Page_Dump_Three.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR)); // took out the appending
 }
 
 __attribute__((destructor))
