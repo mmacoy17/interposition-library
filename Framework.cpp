@@ -8,6 +8,7 @@ using namespace std;
 
 extern "C" {
 	#include "WK.h"
+	#include "lzoconf.h"
 }
 
 /*
@@ -15,7 +16,11 @@ extern "C" {
  * g++ -c Framework.cpp -o Framework.o
  * gcc -c -std=c99 WK.c -o WK.o
  * gcc -c -I. -I./lzo -s -Wall -O2 -fomit-frame-pointer minilzo.c -o minilzo.o
+ * gcc -c lzo1.c -o lzo1.o
+ * gcc -c lzo_init.c -o lzo_init.o
  * g++ -o Framework Framework.o WK.o minilzo.o
+ * 					OR
+ * g++ -o Framework Framework.o WK.o lzo1.o lzo_init.o
  */
 
 
@@ -23,6 +28,40 @@ int PAGE_SIZE = 4096;
 //int WORDS_PER_PAGE = PAGE_SIZE/sizeof(WK_word);
 
 //================================= Extras for minilzo =====================================
+
+typedef struct {
+    lzo_bytep   ptr;
+    lzo_uint    len;
+    lzo_uint32_t adler;
+    lzo_uint32_t crc;
+    lzo_bytep   alloc_ptr;
+    lzo_uint    alloc_len;
+    lzo_uint    saved_len;
+} mblock_t;
+
+//static mblock_t file_data;      /* original uncompressed data */
+//static mblock_t block_c;        /* compressed data */
+//static mblock_t block_d;        /* decompressed data */
+static mblock_t block_w;        /* wrkmem */
+//static mblock_t dict;
+
+typedef struct
+{
+    const char *            name;
+    int                     id;
+    lzo_uint32_t            mem_compress;
+    lzo_uint32_t            mem_decompress;
+    lzo_compress_t          compress;
+    lzo_optimize_t          optimize;
+    lzo_decompress_t        decompress;
+    lzo_decompress_t        decompress_safe;
+    lzo_decompress_t        decompress_asm;
+    lzo_decompress_t        decompress_asm_safe;
+    lzo_decompress_t        decompress_asm_fast;
+    lzo_decompress_t        decompress_asm_fast_safe;
+    lzo_compress_dict_t     compress_dict;
+    lzo_decompress_dict_t   decompress_dict_safe;
+} compress_t;
 
 /* Work-memory needed for compression. Allocate memory in units
  * of 'lzo_align_t' (instead of 'char') to make sure it is properly aligned.
@@ -78,11 +117,11 @@ WK_word * WKAlgo::decompress(WK_word *src, WK_word *dst, unsigned int size){
 // r = lzo1x_1_compress(in,in_len,out,&out_len,wrkmem): 
 // lzo_bytep, lzo_uint, lzo_bytep, lzo_uintp, lzo_voidp
 // unsigned char *, unsigned int64, unsigned char *, &(unsigned int64), void * 
-WK_word * minilzoAlgo::compress(WK_word *src, WK_word *dst, unsigned int numWords){
+/*WK_word * minilzoAlgo::compress(WK_word *src, WK_word *dst, unsigned int numWords){
 
-/*
- * Step 1: initialize the LZO library
- */
+//
+// Step 1: initialize the LZO library
+//
     if (lzo_init() != LZO_E_OK){
         printf("internal error - lzo_init() failed !!!\n");
         printf("(this usually indicates a compiler bug - try recompiling\nwithout optimizations, and enable '-DLZO_DEBUG' for diagnostics)\n");
@@ -99,7 +138,7 @@ WK_word * minilzoAlgo::compress(WK_word *src, WK_word *dst, unsigned int numWord
     if (return_val == LZO_E_OK)
     	printf("Algo compressed %lu bytes into %lu bytes\n", (unsigned long) input_length, (unsigned long) output_length);
     else{
-        /* this should NEVER happen */
+        // this should NEVER happen
         printf("internal error - compression failed: %d\n", return_val);
         return NULL;
     }
@@ -118,6 +157,79 @@ WK_word * minilzoAlgo::decompress(WK_word *src, WK_word *dst, unsigned int size)
 	lzo_uint output_length;
 
 	int return_val = lzo1x_decompress(input_buf,input_length,output_buf,&output_length,NULL);
+
+	if (return_val == LZO_E_OK)
+        printf("Algo decompressed %lu bytes back into %lu bytes\n", (unsigned long) output_length, (unsigned long) input_length);
+    else{
+        // this should NEVER happen
+        printf("internal error - decompression failed: %d\n", return_val);
+        return NULL;
+    }
+
+    src = (WK_word *)input_buf;
+    dst = (WK_word *)output_buf;
+    WK_word *dst_len = dst + (output_length/sizeof(lzo_bytep));
+    return dst_len;
+}*/
+
+
+WK_word * lzo1Algo::compress(WK_word *src, WK_word *dst, unsigned int numWords){
+
+	if (lzo_init() != LZO_E_OK){
+        printf("internal error - lzo_init() failed !!!\n");
+        printf("(this usually indicates a compiler bug - try recompiling\nwithout optimizations, and enable `-DLZO_DEBUG' for diagnostics)\n");
+        exit(1);
+    }
+
+    const compress_t c = { "LZO1-1", 21, LZO1_MEM_COMPRESS, LZO1_MEM_DECOMPRESS, lzo1_compress, 0, lzo1_decompress, 0, 0, 0, 0, 0, 0, 0};
+
+    HEAP_ALLOC(wrkmem, c.mem_compress);
+    
+    /*
+    block_w.len = 0;
+    if (c->mem_compress > block_w.len)
+        block_w.len = c->mem_compress;
+    if (c->mem_decompress > block_w.len)
+        block_w.len = c->mem_decompress;
+
+    block_w.alloc_len = block_w.len;
+    block_w.saved_len = block_w.len;
+    block_w.alloc_ptr = (lzo_bytep) lzo_malloc(block_w.alloc_len);
+    block_w.ptr = block_w.alloc_ptr;
+    block_w.adler = 1;
+    block_w.crc = 0;
+	*/
+
+
+	lzo_bytep input_buf = (lzo_bytep)src;
+	lzo_bytep output_buf = (lzo_bytep)dst;
+	lzo_uint input_length = numWords*sizeof(WK_word);
+	lzo_uint output_length;
+	//HEAP_ALLOC(wrkmem, LZO1X_1_MEM_COMPRESS);
+
+	int return_val = lzo1_compress(input_buf, input_length, output_buf, &output_length, wrkmem);
+    if (return_val == LZO_E_OK)
+    	printf("Algo compressed %lu bytes into %lu bytes\n", (unsigned long) input_length, (unsigned long) output_length);
+    else{
+        /* this should NEVER happen */
+        printf("internal error - compression failed: %d\n", return_val);
+        return NULL;
+    }
+
+
+    src = (WK_word *)input_buf;
+    dst = (WK_word *)output_buf;
+    WK_word *dst_len =(WK_word *) ((char *)dst + output_length);
+    return dst_len;
+}
+
+WK_word * lzo1Algo::decompress(WK_word *src, WK_word *dst, unsigned int size){
+	lzo_bytep input_buf = (lzo_bytep)src;
+	lzo_bytep output_buf = (lzo_bytep)dst;
+	lzo_uint input_length = size;
+	lzo_uint output_length;
+
+	int return_val = lzo1_decompress(input_buf,input_length,output_buf,&output_length,NULL);
 
 	if (return_val == LZO_E_OK)
         printf("Algo decompressed %lu bytes back into %lu bytes\n", (unsigned long) output_length, (unsigned long) input_length);
@@ -141,7 +253,7 @@ int main(int argc, char *argv[]){
 		return -1;
 	}
 
-	WKAlgo test;
+	lzo1Algo test;
 
 	WK_word* src_buf;
 	WK_word* dest_buf;
