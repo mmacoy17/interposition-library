@@ -39,11 +39,7 @@ typedef struct {
     lzo_uint    saved_len;
 } mblock_t;
 
-//static mblock_t file_data;      /* original uncompressed data */
-//static mblock_t block_c;        /* compressed data */
-//static mblock_t block_d;        /* decompressed data */
 static mblock_t block_w;        /* wrkmem */
-//static mblock_t dict;
 
 typedef struct
 {
@@ -184,28 +180,12 @@ WK_word * lzo1Algo::compress(WK_word *src, WK_word *dst, unsigned int numWords){
     const compress_t c = { "LZO1-1", 21, LZO1_MEM_COMPRESS, LZO1_MEM_DECOMPRESS, lzo1_compress, 0, lzo1_decompress, 0, 0, 0, 0, 0, 0, 0};
 
     HEAP_ALLOC(wrkmem, c.mem_compress);
-    
-    /*
-    block_w.len = 0;
-    if (c->mem_compress > block_w.len)
-        block_w.len = c->mem_compress;
-    if (c->mem_decompress > block_w.len)
-        block_w.len = c->mem_decompress;
-
-    block_w.alloc_len = block_w.len;
-    block_w.saved_len = block_w.len;
-    block_w.alloc_ptr = (lzo_bytep) lzo_malloc(block_w.alloc_len);
-    block_w.ptr = block_w.alloc_ptr;
-    block_w.adler = 1;
-    block_w.crc = 0;
-	*/
 
 
 	lzo_bytep input_buf = (lzo_bytep)src;
 	lzo_bytep output_buf = (lzo_bytep)dst;
 	lzo_uint input_length = numWords*sizeof(WK_word);
 	lzo_uint output_length;
-	//HEAP_ALLOC(wrkmem, LZO1X_1_MEM_COMPRESS);
 
 	int return_val = lzo1_compress(input_buf, input_length, output_buf, &output_length, wrkmem);
     if (return_val == LZO_E_OK)
