@@ -141,7 +141,7 @@ int main(int argc, char *argv[]){
 		return -1;
 	}
 
-	minilzoAlgo test;
+	WKAlgo test;
 
 	WK_word* src_buf;
 	WK_word* dest_buf;
