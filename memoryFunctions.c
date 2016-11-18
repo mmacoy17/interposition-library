@@ -281,7 +281,7 @@ void _init_(){
 
 	queueSizeHOT = strtol(getenv("QUEUE_SIZE"), NULL, 10);
 
-	file = open("Page_Dump_Three.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR)); // took out the appending
+	file = open("Firefox_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR)); // took out the appending
 }
 
 __attribute__((destructor))
