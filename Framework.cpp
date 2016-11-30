@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <time.h>
 #include "framework.hpp"
 
 using namespace std;
@@ -226,6 +227,20 @@ WK_word * lzo1Algo::decompress(WK_word *src, WK_word *dst, unsigned int size){
 }
 
 
+struct timespec diff(struct timespec start, struct timespec end)
+{
+  struct timespec temp;
+  if ((end.tv_nsec-start.tv_nsec)<0) {
+    temp.tv_sec = end.tv_sec-start.tv_sec-1;
+    temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+  } else {
+    temp.tv_sec = end.tv_sec-start.tv_sec;
+    temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+  }
+  return temp;
+}
+
+
 int main(int argc, char *argv[]){
 
 	if (argc != 2){
@@ -233,8 +248,11 @@ int main(int argc, char *argv[]){
 		return -1;
 	}
 
+	struct timespec start_time, end_time, total_time;
+
 	lzo1Algo test;
 
+	WK_word* addr;
 	WK_word* src_buf;
 	WK_word* dest_buf;
 	WK_word* udest_buf;
@@ -242,6 +260,7 @@ int main(int argc, char *argv[]){
 	WK_word* udest_end;
 	unsigned int size;
 	int i;
+	addr = (WK_word *)malloc(sizeof(WK_word));
 	src_buf = (WK_word*)malloc(PAGE_SIZE);
 	dest_buf = (WK_word*)malloc(PAGE_SIZE*2);
 	udest_buf = (WK_word*)malloc(PAGE_SIZE);
@@ -253,26 +272,49 @@ int main(int argc, char *argv[]){
 	}
 
 	int holder;
+	long long time_elapsed = 0;
 	int count = 0;
 	int total_pre_compress = 0;
 	int total_post_compress = 0;
-	WK_word *addr = (WK_word *)malloc(sizeof(WK_word));
+
 	fread(addr, sizeof(WK_word), 1, file);
 	while ((holder = fread(src_buf, sizeof(WK_word), WORDS_PER_PAGE, file)) == WORDS_PER_PAGE){
-		dest_end = test.compress(src_buf, dest_buf, WORDS_PER_PAGE);
-		size = ((char *)dest_end - (char *)dest_buf);
-		printf("Page number and direction is: %llu\n", *addr);
-		printf("Compressed %d bytes to %d bytes\n", 4096, size);
+		// if the page is moving out of the HOT queue
+		if (((*addr << 1) >> 1) == *addr){
 
-		total_pre_compress += 4096;
-		total_post_compress += size;
+			// time and track only the compression of this page
+			clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_time);
+			dest_end = test.compress(src_buf, dest_buf, WORDS_PER_PAGE);
+			clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_time);
+			total_time = diff(start_time, end_time);
+			time_elapsed += total_time.tv_sec*1000000000 + total_time.tv_nsec;
 
-		udest_end = test.decompress(dest_buf, udest_buf, size);
-		size = (udest_end - udest_buf) * sizeof(WK_word);
-		printf("Decompressed back to %d bytes\n", size);
+			size = ((char *)dest_end - (char *)dest_buf);
+			//printf("Page number and direction is: %llu\n", *addr);
+			printf("Compressed %d bytes to %d bytes\n", 4096, size);
+
+			//total_pre_compress += 4096;
+			//total_post_compress += size;
+		}
+		// if the page is moving into the HOT queue
+		else{
+			// compress to create the state the page would truly be in if it had been compressed already
+			dest_end = test.compress(src_buf, dest_buf, WORDS_PER_PAGE);
+			// time only the decompression
+			clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_time);
+			udest_end = test.decompress(dest_buf, udest_buf, size);
+			clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_time);
+			total_time = diff(start_time, end_time);
+			time_elapsed += total_time.tv_sec*1000000000 + total_time.tv_nsec;
+
+			size = (udest_end - udest_buf) * sizeof(WK_word);
+			printf("Decompressed back to %d bytes\n", size);
+		}
+
 		count++;
 		fread(addr, sizeof(WK_word), 1, file);
 	}
 	printf("****************Leftover bytes: %d  Number of pages: %d****************\n", holder, count);
-	printf("Compressed %d bytes into %d bytes for a percentage comressed of: %f\n", total_pre_compress, total_post_compress, 1-((double)total_post_compress/total_pre_compress));
+	printf("Compression and Decompression took: %lld seconds and %lld nanoseconds\n", (long long)time_elapsed/1000000000, (long long)time_elapsed%1000000000);
+	//printf("Compressed %d bytes into %d bytes for a percentage comressed of: %f\n", total_pre_compress, total_post_compress, 1-((double)total_post_compress/total_pre_compress));
 }
