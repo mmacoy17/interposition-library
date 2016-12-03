@@ -128,7 +128,7 @@ int bumpBackCold(){
 		*(addr + sizeof(int)) = *(addr);
 		addr--;
 	}
-
+        
 	queueCOLDb++;
 	return 0;
 }
@@ -166,7 +166,7 @@ int locateAndRemove(int number){
  * parameter addr is the address of the page not the page number
  */
 void movePage(void *addr, int direction){
-  //printf("%s %p, %d\n", "movePage() called with the parameters: ", addr, direction);
+  //printf("%s %p, %d\n", "movePage() called with the parameters: ", (void *)((((uintptr_t)addr)>>12)<<12), direction);
 
 	if (direction == 1){
 		// start by clearing out the spot
@@ -179,15 +179,17 @@ void movePage(void *addr, int direction){
 
 		// overwrite the front of the queue and increment
 		*queueHOTf = (int)((uintptr_t)addr >> 12);
+
+
 		// TODO is this overwriting in the statics area?
 		queueHOTf = ((((int)(uintptr_t)queueHOTf - (int)(uintptr_t)mem) / sizeof(int) + 1)%(queueSizeHOT))+mem;
 	}
 	else{
 		if(*queueHOTf != 0){
-			bumpBackCold();			
+			bumpBackCold();
 			*queueCOLDf = *queueHOTf;
 			uintptr_t addressOfPage = ((uintptr_t)*queueHOTf) << 12;
-		      
+
 			//protect this page to induce a SIGSEGV signal when referenced
 			mprotect((void *)addressOfPage, PAGE_SIZE, PROT_NONE);
 		}
@@ -219,11 +221,11 @@ int mprotect(void *addr, size_t len, int prot){
 void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
   int temp = 0;
   if (info->si_code == SEGV_MAPERR) temp = -1;
-        uintptr_t mem_address = (uintptr_t)(info->si_addr);
-	uintptr_t page_addr = (uintptr_t)(mem_address & PAGEBASE_MASK);
+  uintptr_t mem_address = (uintptr_t)(info->si_addr);
+  uintptr_t page_addr = (uintptr_t)(mem_address & PAGEBASE_MASK);
 
-	movePage((void *)page_addr, 1);
-	mprotect((void *)page_addr, PAGE_SIZE, (PROT_READ | PROT_WRITE));
+  movePage((void *)page_addr, 1);
+  mprotect((void *)page_addr, PAGE_SIZE, (PROT_READ | PROT_WRITE));
 
 }
 
@@ -236,16 +238,18 @@ int dumbSearchAlgo(void *addr){
 	// return 1 if in HOT
 	int *location = queueHOTf;
 	for (i=0; i<queueSizeHOT; i++){
-		if(*location == pageNum)
+	  if(*location == pageNum){
 			return 1;
+	  }
 		location = ((((int)(uintptr_t)location - (int)(uintptr_t)mem) / sizeof(int) + 1)%(queueSizeHOT))+mem;
 	}
 
 	// return 0 if in COLD
 	location = queueCOLDf;
 	while (location <= queueCOLDb){
-		if(*location == pageNum)
+	  if(*location == pageNum){
 			return 0;
+	  }
 		location++;
 	}
 
@@ -274,12 +278,14 @@ void _init_(){
 	mem = (int *)mmap(NULL, sizeof(int)*1000000, (PROT_READ | PROT_WRITE), 
 	(MAP_PRIVATE | MAP_ANONYMOUS), -1, 0);
 
+	queueSizeHOT = strtol(getenv("QUEUE_SIZE"), NULL, 10);
+
 	queueHOTf = mem;
 	queueCOLDf = (queueHOTf + sizeof(int)*(queueSizeHOT+1));
 	queueCOLDb = queueCOLDf;
 
 
-	queueSizeHOT = strtol(getenv("QUEUE_SIZE"), NULL, 10);
+
 
 	file = open("../SPEC_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR)); // took out the appending
 }

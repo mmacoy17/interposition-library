@@ -189,8 +189,8 @@ WK_word * lzo1Algo::compress(WK_word *src, WK_word *dst, unsigned int numWords){
 	lzo_uint output_length;
 
 	int return_val = lzo1_compress(input_buf, input_length, output_buf, &output_length, wrkmem);
-    if (return_val == LZO_E_OK)
-    	printf("Algo compressed %lu bytes into %lu bytes\n", (unsigned long) input_length, (unsigned long) output_length);
+	if (return_val == LZO_E_OK);
+      //printf("Algo compressed %lu bytes into %lu bytes\n", (unsigned long) input_length, (unsigned long) output_length);
     else{
         /* this should NEVER happen */
         printf("internal error - compression failed: %d\n", return_val);
@@ -212,8 +212,8 @@ WK_word * lzo1Algo::decompress(WK_word *src, WK_word *dst, unsigned int size){
 
 	int return_val = lzo1_decompress(input_buf,input_length,output_buf,&output_length,NULL);
 
-	if (return_val == LZO_E_OK)
-        printf("Algo decompressed %lu bytes back into %lu bytes\n", (unsigned long) output_length, (unsigned long) input_length);
+	if (return_val == LZO_E_OK);
+	  //printf("Algo decompressed %lu bytes back into %lu bytes\n", (unsigned long) output_length, (unsigned long) input_length);
     else{
         /* this should NEVER happen */
         printf("internal error - decompression failed: %d\n", return_val);
@@ -291,15 +291,16 @@ int main(int argc, char *argv[]){
 
 			size = ((char *)dest_end - (char *)dest_buf);
 			//printf("Page number and direction is: %llu\n", *addr);
-			printf("Compressed %d bytes to %d bytes\n", 4096, size);
+			//printf("Compressed %d bytes to %d bytes\n", 4096, size);
 
-			//total_pre_compress += 4096;
-			//total_post_compress += size;
+			total_pre_compress += 4096;
+			total_post_compress += size;
 		}
 		// if the page is moving into the HOT queue
 		else{
 			// compress to create the state the page would truly be in if it had been compressed already
 			dest_end = test.compress(src_buf, dest_buf, WORDS_PER_PAGE);
+			size = ((char *)dest_end - (char *)dest_buf);
 			// time only the decompression
 			clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_time);
 			udest_end = test.decompress(dest_buf, udest_buf, size);
@@ -307,8 +308,8 @@ int main(int argc, char *argv[]){
 			total_time = diff(start_time, end_time);
 			time_elapsed += total_time.tv_sec*1000000000 + total_time.tv_nsec;
 
-			size = (udest_end - udest_buf) * sizeof(WK_word);
-			printf("Decompressed back to %d bytes\n", size);
+			size = ((char *)udest_end - (char *)udest_buf);
+			//printf("Decompressed back to %d bytes\n", size);
 		}
 
 		count++;
@@ -316,5 +317,5 @@ int main(int argc, char *argv[]){
 	}
 	printf("****************Leftover bytes: %d  Number of pages: %d****************\n", holder, count);
 	printf("Compression and Decompression took: %lld seconds and %lld nanoseconds\n", (long long)time_elapsed/1000000000, (long long)time_elapsed%1000000000);
-	//printf("Compressed %d bytes into %d bytes for a percentage comressed of: %f\n", total_pre_compress, total_post_compress, 1-((double)total_post_compress/total_pre_compress));
+	printf("Compressed %d bytes into %d bytes for a percentage compressed of: %f\n", total_pre_compress, total_post_compress, 1-((double)total_post_compress/total_pre_compress));
 }
