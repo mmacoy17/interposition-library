@@ -60,18 +60,97 @@ void *malloc(size_t size){
   original_malloc = (orig_malloc)dlsym(RTLD_NEXT, "malloc");
   void *location = original_malloc(size);
 
+  uintptr_t location_copy = (uintptr_t)location;
+  uintptr_t end = location_copy + size*8;
 
-  int check = dumbSearchAlgo(location);
-  if (check >= 0){
-  	// Page was either in the HOT queue already, or just put there by mprotect()
-  	return location;
-  }
-  else{
-  	// New page. Must add to HOT queue
-  	movePage(location, 1);
-  }
+  // if the memory is allocated over multiple pages
+
+  do{
+		int check = dumbSearchAlgo(location);
+		if (check >= 0){
+			// Page was either in the HOT queue already, or just put there by mprotect()
+			return location;
+		}
+		else{
+			// New page. Must add to HOT queue
+			movePage(location, 1);
+		}
+		location_copy += 4096;
+	} while(((location_copy-4096) / 4096) != (end/4096));
+
   return location;
 }
+
+
+/*
+ * Passthrough function for calloc which ultimately calls the original calloc
+ * after adding a new page number to the HOT queue if need be
+ */
+typedef void* (*orig_calloc)(size_t nmeb, size_t size); 
+
+void *calloc(size_t nmeb, size_t size){
+  
+  orig_calloc original_calloc;
+  original_calloc = (orig_calloc)dlsym(RTLD_NEXT, "calloc");
+  void *location = original_calloc(nmeb, size);
+
+  uintptr_t location_copy = (uintptr_t)location;
+  uintptr_t end = location_copy + nmeb*size*8;
+
+  // if the memory is allocated over multiple pages
+
+  do{
+		int check = dumbSearchAlgo(location);
+		if (check >= 0){
+			// Page was either in the HOT queue already, or just put there by mprotect()
+			return location;
+		}
+		else{
+			// New page. Must add to HOT queue
+			movePage(location, 1);
+		}
+		location_copy += 4096;
+	} while(((location_copy-4096) / 4096) != (end/4096));
+
+  return location;
+}
+
+
+/*
+ * Passthrough function for realloc which ultimately calls the original realloc
+ * after adding a new page number to the HOT queue if need be
+ */
+typedef void* (*orig_realloc)(void *ptr, size_t size); 
+
+void *realloc(void *ptr, size_t size){
+  
+  orig_realloc original_realloc;
+  original_realloc = (orig_realloc)dlsym(RTLD_NEXT, "realloc");
+  void *location = original_realloc(ptr, size);
+
+  if (location == NULL) return location;
+
+  uintptr_t location_copy = (uintptr_t)location;
+  uintptr_t end = location_copy + size*8;
+
+  // if the memory is allocated over multiple pages
+
+  do{
+		int check = dumbSearchAlgo(location);
+		if (check >= 0){
+			// Page was either in the HOT queue already, or just put there by mprotect()
+			return location;
+		}
+		else{
+			// New page. Must add to HOT queue
+			movePage(location, 1);
+		}
+		location_copy += 4096;
+	} while(((location_copy-4096) / 4096) != (end/4096));
+
+  return location;
+}
+
 
 /*
  * Passthrough function for free which ultimately calls the original free
