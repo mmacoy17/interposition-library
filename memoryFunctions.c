@@ -66,14 +66,14 @@ void *malloc(size_t size){
   // if the memory is allocated over multiple pages
 
   do{
-		int check = dumbSearchAlgo(location);
+		int check = dumbSearchAlgo(location_copy);
 		if (check >= 0){
 			// Page was either in the HOT queue already, or just put there by mprotect()
-			return location;
+			//return location;
 		}
 		else{
 			// New page. Must add to HOT queue
-			movePage(location, 1);
+			movePage(location_copy, 1);
 		}
 		location_copy += 4096;
 	} while(((location_copy-4096) / 4096) != (end/4096));
@@ -100,14 +100,14 @@ void *calloc(size_t nmeb, size_t size){
   // if the memory is allocated over multiple pages
 
   do{
-		int check = dumbSearchAlgo(location);
+		int check = dumbSearchAlgo(location_copy);
 		if (check >= 0){
 			// Page was either in the HOT queue already, or just put there by mprotect()
-			return location;
+			//return location;
 		}
 		else{
 			// New page. Must add to HOT queue
-			movePage(location, 1);
+			movePage(location_copy, 1);
 		}
 		location_copy += 4096;
 	} while(((location_copy-4096) / 4096) != (end/4096));
@@ -136,14 +136,14 @@ void *realloc(void *ptr, size_t size){
   // if the memory is allocated over multiple pages
 
   do{
-		int check = dumbSearchAlgo(location);
+		int check = dumbSearchAlgo(location_copy);
 		if (check >= 0){
 			// Page was either in the HOT queue already, or just put there by mprotect()
-			return location;
+			//return location;
 		}
 		else{
 			// New page. Must add to HOT queue
-			movePage(location, 1);
+			movePage(location_copy, 1);
 		}
 		location_copy += 4096;
 	} while(((location_copy-4096) / 4096) != (end/4096));
