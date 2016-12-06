@@ -97,7 +97,7 @@ void free(void *ptr){
  * parameter addr is the address and not page number
  */
 void dumpPage(void *addr, int direction){
-  printf("%s %p, %d\n", "dumpPage addr and direction: ", addr, direction);
+  //printf("%s %p, %d\n", "dumpPage addr and direction: ", addr, direction);
 	uintptr_t pageNumber = (uintptr_t) PAGENUM((uintptr_t)addr);
 	if (pageNumber == 0){
 		return;	// Do not dump if it is an empty page
