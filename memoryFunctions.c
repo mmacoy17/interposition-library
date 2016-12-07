@@ -66,14 +66,14 @@ void *malloc(size_t size){
   // if the memory is allocated over multiple pages
 
   do{
-		int check = dumbSearchAlgo(location_copy);
+    int check = dumbSearchAlgo((void *)location_copy);
 		if (check >= 0){
 			// Page was either in the HOT queue already, or just put there by mprotect()
 			//return location;
 		}
 		else{
 			// New page. Must add to HOT queue
-			movePage(location_copy, 1);
+		  movePage((void *)location_copy, 1);
 		}
 		location_copy += 4096;
 	} while(((location_copy-4096) / 4096) != (end/4096));
@@ -100,14 +100,14 @@ void *calloc(size_t nmeb, size_t size){
   // if the memory is allocated over multiple pages
 
   do{
-		int check = dumbSearchAlgo(location_copy);
+    int check = dumbSearchAlgo((void *)location_copy);
 		if (check >= 0){
 			// Page was either in the HOT queue already, or just put there by mprotect()
 			//return location;
 		}
 		else{
 			// New page. Must add to HOT queue
-			movePage(location_copy, 1);
+		  movePage((void *)location_copy, 1);
 		}
 		location_copy += 4096;
 	} while(((location_copy-4096) / 4096) != (end/4096));
@@ -120,7 +120,7 @@ void *calloc(size_t nmeb, size_t size){
  * Passthrough function for realloc which ultimately calls the original realloc
  * after adding a new page number to the HOT queue if need be
  */
-typedef void* (*orig_realloc)(void *ptr, size_t size); 
+/*typedef void* (*orig_realloc)(void *ptr, size_t size); 
 
 void *realloc(void *ptr, size_t size){
   
@@ -136,20 +136,20 @@ void *realloc(void *ptr, size_t size){
   // if the memory is allocated over multiple pages
 
   do{
-		int check = dumbSearchAlgo(location_copy);
+    int check = dumbSearchAlgo((void *)location_copy);
 		if (check >= 0){
 			// Page was either in the HOT queue already, or just put there by mprotect()
 			//return location;
 		}
 		else{
 			// New page. Must add to HOT queue
-			movePage(location_copy, 1);
+		  movePage((void *)location_copy, 1);
 		}
 		location_copy += 4096;
-	} while(((location_copy-4096) / 4096) != (end/4096));
+  } while (((location_copy-4096) / 4096) != (end/4096));
 
   return location;
-}
+  }*/
 
 
 /*
@@ -366,7 +366,7 @@ void _init_(){
 
 
 
-	file = open("../SPEC_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR)); // took out the appending
+	file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/SPEC_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR)); // took out the appending
 }
 
 __attribute__((destructor))

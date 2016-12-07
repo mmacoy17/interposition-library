@@ -274,8 +274,8 @@ int main(int argc, char *argv[]){
 	int holder;
 	long long time_elapsed = 0;
 	int count = 0;
-	int total_pre_compress = 0;
-	int total_post_compress = 0;
+	long long total_pre_compress = 0;
+	long long total_post_compress = 0;
 
 	fread(addr, sizeof(WK_word), 1, file);
 	while ((holder = fread(src_buf, sizeof(WK_word), WORDS_PER_PAGE, file)) == WORDS_PER_PAGE){
@@ -317,5 +317,5 @@ int main(int argc, char *argv[]){
 	}
 	printf("****************Leftover bytes: %d  Number of pages: %d****************\n", holder, count);
 	printf("Compression and Decompression took: %lld seconds and %lld nanoseconds\n", (long long)time_elapsed/1000000000, (long long)time_elapsed%1000000000);
-	printf("Compressed %d bytes into %d bytes for a percentage compressed of: %f\n", total_pre_compress, total_post_compress, 1-((double)total_post_compress/total_pre_compress));
+	printf("Compressed %lld bytes into %lld bytes for a percentage compressed of: %f\n", total_pre_compress, total_post_compress, 1-((double)total_post_compress/total_pre_compress));
 }
