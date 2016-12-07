@@ -252,7 +252,7 @@ void movePage(void *addr, int direction){
 		movePage(NULL, 0);
 
 		// check where in the COLD queue the page was (if anywhere) and remove it
-		int location = locateAndRemove((int)((uintptr_t)addr >> 12));
+		//int location = locateAndRemove((int)((uintptr_t)addr >> 12));
 		//if (location != -1)
 		//	addMemRef(location);
 
@@ -265,8 +265,8 @@ void movePage(void *addr, int direction){
 	}
 	else{
 		if(*queueHOTf != 0){
-			bumpBackCold();
-			*queueCOLDf = *queueHOTf;
+			//bumpBackCold();
+			//*queueCOLDf = *queueHOTf;
 			uintptr_t addressOfPage = ((uintptr_t)*queueHOTf) << 12;
 
 			//protect this page to induce a SIGSEGV signal when referenced
@@ -324,13 +324,13 @@ int dumbSearchAlgo(void *addr){
 	}
 
 	// return 0 if in COLD
-	location = queueCOLDf;
-	while (location <= queueCOLDb){
-	  if(*location == pageNum){
-			return 0;
-	  }
-		location++;
-	}
+	//location = queueCOLDf;
+	//while (location <= queueCOLDb){
+	//  if(*location == pageNum){
+	//		return 0;
+	//  }
+	//	location++;
+	//}
 
 	// not in HOT or COLD
 	return -1;
