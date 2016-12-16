@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #define PAGE_SIZE 4096
 #define OFFSET_MASK 0xfff
@@ -25,7 +26,7 @@
  */
 
 
-
+ 
 int queueSizeHOT;
 
 // map a region for the queues and then set the front of the HOT queue to the front
@@ -59,27 +60,29 @@ void *malloc(size_t size){
   orig_malloc original_malloc;
   original_malloc = (orig_malloc)dlsym(RTLD_NEXT, "malloc");
   void *location = original_malloc(size);
+ 
 
   uintptr_t location_copy = (uintptr_t)location;
-  uintptr_t end = location_copy + size*8;
+  uintptr_t end = location_copy + size;
 
   // if the memory is allocated over multiple pages
+  int i =0;
 
-  do{
+  while((location_copy / 4096) <= (end/4096)){
     int check = dumbSearchAlgo((void *)location_copy);
-		if (check >= 0){
-			// Page was either in the HOT queue already, or just put there by mprotect()
-			//return location;
-		}
-		else{
-			// New page. Must add to HOT queue
-		  movePage((void *)location_copy, 1);
-		}
-		location_copy += 4096;
-	} while(((location_copy-4096) / 4096) != (end/4096));
+    if (check >= 0){
+      // Page was either in the HOT queue already, or just put there by mprotect()
+      //return location;
+    }
+    else{
+      // New page. Must add to HOT queue
+      movePage((void *)location_copy, 1);
+    }
+    location_copy += 4096;
+    }
 
   return location;
-}
+  }
 
 
 /*
@@ -95,32 +98,32 @@ void *calloc(size_t nmeb, size_t size){
   void *location = original_calloc(nmeb, size);
 
   uintptr_t location_copy = (uintptr_t)location;
-  uintptr_t end = location_copy + nmeb*size*8;
+  uintptr_t end = location_copy + nmeb*size;
 
   // if the memory is allocated over multiple pages
 
-  do{
+  while((location_copy / 4096) <= (end/4096)){
     int check = dumbSearchAlgo((void *)location_copy);
-		if (check >= 0){
-			// Page was either in the HOT queue already, or just put there by mprotect()
-			//return location;
-		}
-		else{
-			// New page. Must add to HOT queue
-		  movePage((void *)location_copy, 1);
-		}
-		location_copy += 4096;
-	} while(((location_copy-4096) / 4096) != (end/4096));
+    if (check >= 0){
+      // Page was either in the HOT queue already, or just put there by mprotect()
+      //return location;
+    }
+    else{
+      // New page. Must add to HOT queue
+      movePage((void *)location_copy, 1);
+    }
+    location_copy += 4096;
+   }
 
   return location;
-}
+  }
 
 
 /*
  * Passthrough function for realloc which ultimately calls the original realloc
  * after adding a new page number to the HOT queue if need be
  */
-/*typedef void* (*orig_realloc)(void *ptr, size_t size); 
+typedef void* (*orig_realloc)(void *ptr, size_t size); 
 
 void *realloc(void *ptr, size_t size){
   
@@ -131,37 +134,37 @@ void *realloc(void *ptr, size_t size){
   if (location == NULL) return location;
 
   uintptr_t location_copy = (uintptr_t)location;
-  uintptr_t end = location_copy + size*8;
+  uintptr_t end = location_copy + size;
 
   // if the memory is allocated over multiple pages
 
-  do{
+  while ((location_copy / 4096) <= (end/4096)){
     int check = dumbSearchAlgo((void *)location_copy);
-		if (check >= 0){
-			// Page was either in the HOT queue already, or just put there by mprotect()
-			//return location;
-		}
-		else{
-			// New page. Must add to HOT queue
-		  movePage((void *)location_copy, 1);
-		}
-		location_copy += 4096;
-  } while (((location_copy-4096) / 4096) != (end/4096));
+    if (check >= 0){
+      // Page was either in the HOT queue already, or just put there by mprotect()
+      //return location;
+    }
+    else{
+      // New page. Must add to HOT queue
+      movePage((void *)location_copy, 1);
+    }
+    location_copy += 4096;
+  }
 
   return location;
-  }*/
+  }
 
 
 /*
  * Passthrough function for free which ultimately calls the original free
  */
-typedef void (*orig_free)(void *ptr);
+/*typedef void (*orig_free)(void *ptr);
 
 void free(void *ptr){
   orig_free original_free;
   original_free = (orig_free)dlsym(RTLD_NEXT, "free");
   return original_free(ptr);
-}
+  }*/
 
 
 //============================== PAGE HANDLING ================================
@@ -188,16 +191,25 @@ void dumpPage(void *addr, int direction){
 	void *pageNumPtr = &pageNumber;
 	void *pageAddrPtr = &pageAddr;
 
-	write(file, pageNumPtr, sizeof(pageNumPtr));
+	int err = write(file, pageNumPtr, sizeof(pageNumPtr));
+	if (err != 8){
+	  file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/SPEC_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR));
+	  err = write(file, pageNumPtr, sizeof(pageNumPtr));
+	  printf("\n********* response to error in # was writing %d bytes %d **********\n", err, errno);
+	}
 
 	// write the contents of the page
-	write(file, pageAddrPtr, (size_t)PAGE_SIZE);
-
+	err = write(file, pageAddrPtr, (size_t)PAGE_SIZE);
+	if (err != 4096){
+	  file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/SPEC_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR));
+	  err = write(file, pageAddrPtr, (size_t)PAGE_SIZE);
+	  printf("\n********* response to error in page was writing %d bytes %d **********\n", err, errno);
+	}
 
 }
 
 int bumpBackCold(){
-	int *addr = queueCOLDb;
+  /*int *addr = queueCOLDb;
 
 	// NOTE HARDCODE
 	if ((queueCOLDb+sizeof(int)) > (mem+sizeof(int)*1000000))
@@ -208,7 +220,7 @@ int bumpBackCold(){
 		addr--;
 	}
         
-	queueCOLDb++;
+	queueCOLDb++;*/
 	return 0;
 }
 
@@ -219,7 +231,8 @@ int bumpBackCold(){
  * parameter number is the page number not the address
  */
 int locateAndRemove(int number){
-	int *location = queueCOLDf;
+  return -1;
+  /*int *location = queueCOLDf;
 	int position = 0;
 	// move through the full COLD queue until found or at the end
 	while (location <= queueCOLDb){
@@ -235,7 +248,7 @@ int locateAndRemove(int number){
 		location++;
 		position++;
 	}
-	return -1;
+	return -1;*/
 }
 
 /*
@@ -252,7 +265,7 @@ void movePage(void *addr, int direction){
 		movePage(NULL, 0);
 
 		// check where in the COLD queue the page was (if anywhere) and remove it
-		//int location = locateAndRemove((int)((uintptr_t)addr >> 12));
+		int location = locateAndRemove((int)((uintptr_t)addr >> 12));
 		//if (location != -1)
 		//	addMemRef(location);
 
@@ -265,8 +278,8 @@ void movePage(void *addr, int direction){
 	}
 	else{
 		if(*queueHOTf != 0){
-			//bumpBackCold();
-			//*queueCOLDf = *queueHOTf;
+			bumpBackCold();
+			*queueCOLDf = *queueHOTf;
 			uintptr_t addressOfPage = ((uintptr_t)*queueHOTf) << 12;
 
 			//protect this page to induce a SIGSEGV signal when referenced
@@ -315,21 +328,24 @@ int dumbSearchAlgo(void *addr){
 	int i;
 
 	// return 1 if in HOT
-	int *location = queueHOTf;
+	int *location = queueHOTf-1;
+	if (location < mem) location = mem + queueSizeHOT-1;
 	for (i=0; i<queueSizeHOT; i++){
 	  if(*location == pageNum){
-			return 1;
+	    return 1;
 	  }
-		location = ((((int)(uintptr_t)location - (int)(uintptr_t)mem) / sizeof(int) + 1)%(queueSizeHOT))+mem;
+	  //location = ((((int)(uintptr_t)location - (int)(uintptr_t)mem) / sizeof(int) + 1)%(queueSizeHOT))+mem;
+	  location = location - 1;
+	  if (location < mem) location = mem + queueSizeHOT-1;
 	}
 
 	// return 0 if in COLD
 	//location = queueCOLDf;
 	//while (location <= queueCOLDb){
 	//  if(*location == pageNum){
-	//		return 0;
+	//    return 0;
 	//  }
-	//	location++;
+	//  location++;
 	//}
 
 	// not in HOT or COLD
@@ -373,4 +389,4 @@ __attribute__((destructor))
 void _atClose_(){
 	//close the file
 	close(file);
-}
+	}

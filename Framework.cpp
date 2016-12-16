@@ -12,6 +12,7 @@ extern "C" {
 	#include "lzoconf.h"
 }
 
+
 /*
  * Compile instructions:
  * g++ -c Framework.cpp -o Framework.o
@@ -110,11 +111,13 @@ WK_word * WKAlgo::decompress(WK_word *src, WK_word *dst, unsigned int size){
 }
 
 
+#ifdef MINI
 // Requires much more work to convert to something that can play nice with miniLZO
 // r = lzo1x_1_compress(in,in_len,out,&out_len,wrkmem): 
 // lzo_bytep, lzo_uint, lzo_bytep, lzo_uintp, lzo_voidp
 // unsigned char *, unsigned int64, unsigned char *, &(unsigned int64), void * 
-/*WK_word * minilzoAlgo::compress(WK_word *src, WK_word *dst, unsigned int numWords){
+
+WK_word * minilzoAlgo::compress(WK_word *src, WK_word *dst, unsigned int numWords){
 
 //
 // Step 1: initialize the LZO library
@@ -167,9 +170,9 @@ WK_word * minilzoAlgo::decompress(WK_word *src, WK_word *dst, unsigned int size)
     dst = (WK_word *)output_buf;
     WK_word *dst_len = dst + (output_length/sizeof(lzo_bytep));
     return dst_len;
-}*/
+}
 
-
+#else
 WK_word * lzo1Algo::compress(WK_word *src, WK_word *dst, unsigned int numWords){
 
 	if (lzo_init() != LZO_E_OK){
@@ -204,6 +207,7 @@ WK_word * lzo1Algo::compress(WK_word *src, WK_word *dst, unsigned int numWords){
     return dst_len;
 }
 
+
 WK_word * lzo1Algo::decompress(WK_word *src, WK_word *dst, unsigned int size){
 	lzo_bytep input_buf = (lzo_bytep)src;
 	lzo_bytep output_buf = (lzo_bytep)dst;
@@ -225,7 +229,7 @@ WK_word * lzo1Algo::decompress(WK_word *src, WK_word *dst, unsigned int size){
     WK_word *dst_len = dst + (output_length/sizeof(lzo_bytep));
     return dst_len;
 }
-
+#endif
 
 struct timespec diff(struct timespec start, struct timespec end)
 {
@@ -250,7 +254,7 @@ int main(int argc, char *argv[]){
 
 	struct timespec start_time, end_time, total_time;
 
-	lzo1Algo test;
+	WKAlgo test;
 
 	WK_word* addr;
 	WK_word* src_buf;
@@ -264,6 +268,7 @@ int main(int argc, char *argv[]){
 	src_buf = (WK_word*)malloc(PAGE_SIZE);
 	dest_buf = (WK_word*)malloc(PAGE_SIZE*2);
 	udest_buf = (WK_word*)malloc(PAGE_SIZE);
+
 
 	FILE *file = fopen(argv[1], "r");
 	if(file == NULL){
@@ -315,7 +320,8 @@ int main(int argc, char *argv[]){
 		count++;
 		fread(addr, sizeof(WK_word), 1, file);
 	}
+	fclose(file);
 	printf("****************Leftover bytes: %d  Number of pages: %d****************\n", holder, count);
-	printf("Compression and Decompression took: %lld seconds and %lld nanoseconds\n", (long long)time_elapsed/1000000000, (long long)time_elapsed%1000000000);
-	printf("Compressed %lld bytes into %lld bytes for a percentage compressed of: %f\n", total_pre_compress, total_post_compress, 1-((double)total_post_compress/total_pre_compress));
+	printf("WK Compression and Decompression took: %lld seconds and %lld nanoseconds\n", (long long)time_elapsed/1000000000, (long long)time_elapsed%1000000000);
+	printf("WK Compressed %lld bytes into %lld bytes for a percentage compressed of: %f\n", total_pre_compress, total_post_compress, 1-((double)total_post_compress/total_pre_compress));
 }

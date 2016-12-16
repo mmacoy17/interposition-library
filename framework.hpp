@@ -1,9 +1,13 @@
 extern "C" {
 	#include "WK.h"
+#ifndef MINI
 	#include "lzo_conf.h"
 	#include "lzoconf.h"
 	#include "lzo1.h"
-	//#include "minilzo.h"
+#endif
+#ifdef MINI
+	#include "minilzo.h"
+#endif
 }
 
 class CompressionAlgo{
@@ -23,14 +27,18 @@ public:
 	WK_word * decompress(WK_word *src, WK_word *dst, unsigned int size);
 };
 
-/*class minilzoAlgo: public CompressionAlgo{
+#ifdef MINI
+class minilzoAlgo: public CompressionAlgo{
 public:
 	WK_word * compress(WK_word *src, WK_word *dst, unsigned int numWords);
 	WK_word * decompress(WK_word *src, WK_word *dst, unsigned int size);
-};*/
+};
+#endif
 
+#ifndef MINI
 class lzo1Algo: public CompressionAlgo{
 public:
 	WK_word * compress(WK_word *src, WK_word *dst, unsigned int numWords);
 	WK_word * decompress(WK_word *src, WK_word *dst, unsigned int size);
 };
+#endif
