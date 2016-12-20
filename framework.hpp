@@ -10,6 +10,13 @@ extern "C" {
 #endif
 }
 
+typedef struct{
+  WK_word       address;
+  unsigned int  comp_size;
+  long long     comp_time;
+  long long     decomp_time;
+} page_info;
+
 class CompressionAlgo{
 	virtual WK_word * compress(WK_word *src, WK_word *dst, unsigned int numWords) = 0;
 	virtual WK_word * decompress(WK_word *src, WK_word *dst, unsigned int size) = 0;

@@ -247,8 +247,8 @@ struct timespec diff(struct timespec start, struct timespec end)
 
 int main(int argc, char *argv[]){
 
-	if (argc != 2){
-		printf("Invalid use of command. Include one file name.\n");
+	if (argc != 3){
+		printf("Invalid use of command. Include one input file and one output file.\n");
 		return -1;
 	}
 
@@ -270,11 +270,14 @@ int main(int argc, char *argv[]){
 	udest_buf = (WK_word*)malloc(PAGE_SIZE);
 
 
-	FILE *file = fopen(argv[1], "r");
-	if(file == NULL){
+	FILE *infile = fopen(argv[1], "r");
+	if(infile == NULL){
 		printf("Invalid file name.\n");
 		return -2;
 	}
+
+	FILE *outfile = fopen(argv[2], "w+");
+	
 
 	int holder;
 	long long time_elapsed = 0;
@@ -282,8 +285,35 @@ int main(int argc, char *argv[]){
 	long long total_pre_compress = 0;
 	long long total_post_compress = 0;
 
-	fread(addr, sizeof(WK_word), 1, file);
-	while ((holder = fread(src_buf, sizeof(WK_word), WORDS_PER_PAGE, file)) == WORDS_PER_PAGE){
+	page_info current_page;
+	long long current_time = 0;
+
+	fread(addr, sizeof(WK_word), 1, infile);
+	current_page.address = *addr;
+	while ((holder = fread(src_buf, sizeof(WK_word), WORDS_PER_PAGE, infile)) == WORDS_PER_PAGE){
+
+
+   	        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_time);
+	        dest_end = test.compress(src_buf, dest_buf, WORDS_PER_PAGE);
+	        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_time);
+	        total_time = diff(start_time, end_time);
+	        current_time = total_time.tv_sec*1000000000 + total_time.tv_nsec;
+	        size = ((char *)dest_end - (char *)dest_buf);
+
+		current_page.comp_size = size;
+		current_page.comp_time = current_time;
+
+		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_time);
+		udest_end = test.decompress(dest_buf, udest_buf, size);
+		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_time);
+		total_time = diff(start_time, end_time);
+		current_time = total_time.tv_sec*1000000000 + total_time.tv_nsec;
+
+		current_page.decomp_time = current_time;
+
+		fwrite(&current_page, sizeof(page_info), 1, outfile);
+
+		/*
 		// if the page is moving out of the HOT queue
 		if (((*addr << 1) >> 1) == *addr){
 
@@ -315,12 +345,13 @@ int main(int argc, char *argv[]){
 
 			size = ((char *)udest_end - (char *)udest_buf);
 			//printf("Decompressed back to %d bytes\n", size);
-		}
+		}*/
 
 		count++;
-		fread(addr, sizeof(WK_word), 1, file);
+		fread(addr, sizeof(WK_word), 1, infile);
+		current_page.address = *addr;
 	}
-	fclose(file);
+	fclose(infile);
 	printf("****************Leftover bytes: %d  Number of pages: %d****************\n", holder, count);
 	printf("WK Compression and Decompression took: %lld seconds and %lld nanoseconds\n", (long long)time_elapsed/1000000000, (long long)time_elapsed%1000000000);
 	printf("WK Compressed %lld bytes into %lld bytes for a percentage compressed of: %f\n", total_pre_compress, total_post_compress, 1-((double)total_post_compress/total_pre_compress));
