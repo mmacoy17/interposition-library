@@ -9,16 +9,50 @@ extern "C" {
 }
 
 
-int num_cache = 3;
+int num_cache = 1;
 FILE *file;
-long long mem_size = 8000;
-int queue_size = 2000;
-long long disk_time = 400000000;
+long long mem_size = 10485760; // 10MB of RAM
+int queue_size = 2000;           // number of pages
+long long trace_mem_size;
+long long disk_time = 400000000; // in ms
+
+page_info *queueF;// = (page_info *)malloc(sizeof(page_info)*25000);
+page_info *queueB;// = queueF;
+
+long long mem_used = 0;
+
+void pushBackQueue(page_info *move, int index){
+  if (index == -1 && (queueB+1)>=queueF+500000) printf("END OF QUEUE REACHED****\n");
+  page_info holder = *move;
+  page_info *location = queueF + index -1;
+  if (index == -1){
+    location = queueB;
+    queueB++;
+  }
+  while(location >= queueF){
+    *(location+1) = *location;
+    location--;
+  }
+  *queueF = holder;
+}
+
+int searchQueue(WK_word address){
+  int count = 0;
+  page_info *location = queueF;
+  while((location+count) < queueB && count<=(mem_used/4096)){
+    if((((location->address)<<1)>>1) == address)
+      return count;
+    count++;
+  }
+  return -1;
+}
+
 
 
 
 int main(int argc, char *argv[]){
   
+  // ensuring proper use
   if (argc != 2){
     printf("Invalid use of command. Include one input file.\n");
     return -1;
@@ -29,18 +63,34 @@ int main(int argc, char *argv[]){
     printf("Invalid file name.\n");
     return -2;
   }
-
-  long long total_time = 0;
-  long long total_size = 0;
-  int count = 0;
-  page_info current_page;
-
-  while (fread(&current_page, sizeof(page_info), 1, file) == 1){
-    total_time += current_page.comp_time + current_page.decomp_time;
-    total_size += current_page.comp_size;
-    count++;
+  
+  trace_mem_size = queue_size*4096;
+  if (trace_mem_size >= mem_size){
+    printf("Memory size must be greater than QUEUE_SIZE*4096");
+    return -3;
   }
 
-  printf("Total compression and decompression time is %llu and size is %llu. count: %d\n", total_time, total_size, count);
-  
+  queueF = (page_info *)malloc(sizeof(page_info)*500000);
+  queueB = queueF;
+
+  long long time_used = 0;
+  page_info current_page;
+
+  //actual meat of processing
+  while (fread(&current_page, sizeof(page_info), 1, file) == 1){
+    //printf("MADE IT\n");
+    //printf("%p\n", (void *)(((current_page.address)<<1)>>1));
+    int index = searchQueue((((current_page.address)<<1)>>1));
+    if (index != -1) printf("NON-NEGATIVE: %d\n", index);
+    //printf("ONE %d\n", index);
+    pushBackQueue(&current_page, index);
+    //printf("TWO\n");
+    if((index == -1 && mem_used+4096 > mem_size) || (index > mem_size/4096)){
+      time_used += disk_time;
+    }
+    if (index == -1){
+      mem_used += 4096;
+    }
+  }
+  printf("Total time spent on swaps is %llu ns\n", time_used);
 }

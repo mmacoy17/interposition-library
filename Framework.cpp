@@ -282,6 +282,7 @@ int main(int argc, char *argv[]){
 	int holder;
 	long long time_elapsed = 0;
 	int count = 0;
+	int inwards = 0;
 	long long total_pre_compress = 0;
 	long long total_post_compress = 0;
 
@@ -350,9 +351,11 @@ int main(int argc, char *argv[]){
 		count++;
 		fread(addr, sizeof(WK_word), 1, infile);
 		current_page.address = *addr;
+		//printf("%p   %p\n", (void *)*addr, (void *)current_page.address);
+		if ((*addr | 0b10000000000000000000000000000000) == *addr) inwards++;
 	}
 	fclose(infile);
-	printf("****************Leftover bytes: %d  Number of pages: %d****************\n", holder, count);
+	printf("****************Leftover bytes: %d  Number of pages: %d  Number inwards: %d****************\n", holder, count, inwards);
 	printf("WK Compression and Decompression took: %lld seconds and %lld nanoseconds\n", (long long)time_elapsed/1000000000, (long long)time_elapsed%1000000000);
 	printf("WK Compressed %lld bytes into %lld bytes for a percentage compressed of: %f\n", total_pre_compress, total_post_compress, 1-((double)total_post_compress/total_pre_compress));
 }
