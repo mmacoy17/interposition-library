@@ -11,7 +11,7 @@ extern "C" {
 
 int num_cache = 1;
 FILE *file;
-long long mem_size = 10485760; // 10MB of RAM
+long long mem_size = 104857600; // 100MB of RAM
 int queue_size = 2000;           // number of pages
 long long trace_mem_size;
 long long disk_time = 400000000; // in ms
@@ -40,7 +40,7 @@ int searchQueue(WK_word address){
   int count = 0;
   page_info *location = queueF;
   while((location+count) < queueB && count<=(mem_used/4096)){
-    if((((location->address)<<1)>>1) == address)
+    if(((((location+count)->address)<<1)>>1) == address)
       return count;
     count++;
   }
@@ -74,6 +74,7 @@ int main(int argc, char *argv[]){
   queueB = queueF;
 
   long long time_used = 0;
+  long long comp_time_used = 0;
   page_info current_page;
 
   //actual meat of processing
@@ -81,16 +82,22 @@ int main(int argc, char *argv[]){
     //printf("MADE IT\n");
     //printf("%p\n", (void *)(((current_page.address)<<1)>>1));
     int index = searchQueue((((current_page.address)<<1)>>1));
-    if (index != -1) printf("NON-NEGATIVE: %d\n", index);
+    //if (index != -1) printf("NON-NEGATIVE: %d\n", index);
     //printf("ONE %d\n", index);
     pushBackQueue(&current_page, index);
     //printf("TWO\n");
-    if((index == -1 && mem_used+4096 > mem_size) || (index > mem_size/4096)){
-      time_used += disk_time;
+    if((((current_page.address)<<1)>>1) != current_page.address){
+      if((index == -1 && mem_used+4096 > mem_size) || index > ((mem_size/4096)*1.10))
+        comp_time_used += disk_time;
+
+      if((index == -1 && mem_used+4096 > mem_size) || (index > mem_size/4096)){
+        time_used += disk_time;
+      }
     }
     if (index == -1){
       mem_used += 4096;
     }
   }
   printf("Total time spent on swaps is %llu ns\n", time_used);
+  printf("With \"compression\" total time spent on swaps is %llu ns\n", comp_time_used);
 }
