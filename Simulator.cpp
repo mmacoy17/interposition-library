@@ -71,6 +71,7 @@ int main(int argc, char *argv[]){
   }
 
   FILE *tester = fopen("address_file.txt", "w+");
+  FILE *problems = fopen("problem_file.txt", "w+");
 
   queueF = (page_info *)malloc(sizeof(page_info)*500000);
   queueB = queueF;
@@ -93,6 +94,7 @@ int main(int argc, char *argv[]){
     //printf("TWO\n");
     if((((current_page.address)<<1)>>1) != current_page.address){
       if((index == -1 && mem_used+4096 > mem_size) /*|| index > ((mem_size/4096)*1.10)*/){
+	fprintf(problems, "%lu\n", ((current_page.address<<1)>>1));
 	printf("Address: %lu      %lu\n", current_page.address, ((current_page.address)<<1)>>1);
 	printf("Index: %d\n", index);
         comp_time_used += disk_time;
