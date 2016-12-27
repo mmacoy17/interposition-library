@@ -288,6 +288,7 @@ int main(int argc, char *argv[]){
 
 	page_info current_page;
 	long long current_time = 0;
+	int numLarge = 0;
 
 	fread(addr, sizeof(WK_word), 1, infile);
 	current_page.address = *addr;
@@ -351,11 +352,16 @@ int main(int argc, char *argv[]){
 		count++;
 		fread(addr, sizeof(WK_word), 1, infile);
 		current_page.address = *addr;
+		if (*addr > 0xffffffff){
+		  printf("*****Large addr: %lu******\n", *addr);
+		  numLarge++;
+		}
 		//printf("%p   %p\n", (void *)*addr, (void *)current_page.address);
-		if ((*addr | 0b10000000000000000000000000000000) == *addr) inwards++;
+		if ((*addr | 0x8000000000000000) == *addr) inwards++;
 	}
 	fclose(infile);
-	printf("****************Leftover bytes: %d  Number of pages: %d  Number inwards: %d****************\n", holder, count, inwards);
+	printf("****************Leftover bytes: %d  Number of pages: %d  Number inwards: %d   Number large: %d****************\n", holder, count, inwards, numLarge);
 	printf("WK Compression and Decompression took: %lld seconds and %lld nanoseconds\n", (long long)time_elapsed/1000000000, (long long)time_elapsed%1000000000);
 	printf("WK Compressed %lld bytes into %lld bytes for a percentage compressed of: %f\n", total_pre_compress, total_post_compress, 1-((double)total_post_compress/total_pre_compress));
+	printf("Size of WK_word: %lu     Size of uintptr_t:   %lu\n", sizeof(WK_word), sizeof(uintptr_t));
 }

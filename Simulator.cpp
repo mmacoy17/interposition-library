@@ -11,7 +11,7 @@ extern "C" {
 
 int num_cache = 1;
 FILE *file;
-long long mem_size = 104857600; // 100MB of RAM
+long long mem_size = 10485760; // 100MB of RAM
 int queue_size = 2000;           // number of pages
 long long trace_mem_size;
 long long disk_time = 400000000; // in ms
@@ -21,9 +21,9 @@ page_info *queueB;// = queueF;
 
 long long mem_used = 0;
 
-void pushBackQueue(page_info *move, int index){
+void pushBackQueue(page_info move, int index){
   if (index == -1 && (queueB+1)>=queueF+500000) printf("END OF QUEUE REACHED****\n");
-  page_info holder = *move;
+  page_info holder = move;
   page_info *location = queueF + index -1;
   if (index == -1){
     location = queueB;
@@ -70,6 +70,8 @@ int main(int argc, char *argv[]){
     return -3;
   }
 
+  FILE *tester = fopen("address_file.txt", "w+");
+
   queueF = (page_info *)malloc(sizeof(page_info)*500000);
   queueB = queueF;
 
@@ -77,19 +79,28 @@ int main(int argc, char *argv[]){
   long long comp_time_used = 0;
   page_info current_page;
 
+  WK_word *holder = (WK_word *)(malloc(sizeof(WK_word)));
+  char *breaker[] = {"\n"};
+
+  printf("%llu\n", mem_size/4096);
   //actual meat of processing
   while (fread(&current_page, sizeof(page_info), 1, file) == 1){
+    *holder = current_page.address;
+    fwrite(holder, sizeof(WK_word), 1, tester);
+    fwrite(breaker, sizeof(breaker), 1, tester);
     //printf("MADE IT\n");
     //printf("%p\n", (void *)(((current_page.address)<<1)>>1));
     int index = searchQueue((((current_page.address)<<1)>>1));
     //if (index != -1) printf("NON-NEGATIVE: %d\n", index);
     //printf("ONE %d\n", index);
-    pushBackQueue(&current_page, index);
+    pushBackQueue(current_page, index);
     //printf("TWO\n");
     if((((current_page.address)<<1)>>1) != current_page.address){
-      if((index == -1 && mem_used+4096 > mem_size) || index > ((mem_size/4096)*1.10))
+      if((index == -1 && mem_used+4096 > mem_size) /*|| index > ((mem_size/4096)*1.10)*/){
+	printf("Address: %lu      %lu\n", current_page.address, ((current_page.address)<<1)>>1);
+	printf("Index: %d\n", index);
         comp_time_used += disk_time;
-
+      }
       if((index == -1 && mem_used+4096 > mem_size) || (index > mem_size/4096)){
         time_used += disk_time;
       }
