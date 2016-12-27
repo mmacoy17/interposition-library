@@ -79,15 +79,11 @@ int main(int argc, char *argv[]){
   long long comp_time_used = 0;
   page_info current_page;
 
-  WK_word *holder = (WK_word *)(malloc(sizeof(WK_word)));
-  char *breaker[] = {"\n"};
 
   printf("%llu\n", mem_size/4096);
   //actual meat of processing
   while (fread(&current_page, sizeof(page_info), 1, file) == 1){
-    *holder = current_page.address;
-    fwrite(holder, sizeof(WK_word), 1, tester);
-    fwrite(breaker, sizeof(breaker), 1, tester);
+    fprintf(tester, "%lu\n", ((current_page.address<<1)>>1));
     //printf("MADE IT\n");
     //printf("%p\n", (void *)(((current_page.address)<<1)>>1));
     int index = searchQueue((((current_page.address)<<1)>>1));
