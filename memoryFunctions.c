@@ -39,6 +39,7 @@ int *queueCOLDb;
 
 //File for page dumps
 int file;
+int add_file;
 
 
 //============================ METHOD DECLARATIONS ============================
@@ -192,6 +193,7 @@ void dumpPage(void *addr, int direction){
 	void *pageAddrPtr = &pageAddr;
 
 	int err = write(file, pageNumPtr, sizeof(pageNumPtr));
+	write(add_file, pageNumPtr, sizeof(pageNumPtr));
 	if (err != 8){
 	  file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/SPEC_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR));
 	  err = write(file, pageNumPtr, sizeof(pageNumPtr));
@@ -383,10 +385,12 @@ void _init_(){
 
 
 	file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/SPEC_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR)); // took out the appending
+	add_file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/mem_address_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR));
 }
 
 __attribute__((destructor))
 void _atClose_(){
 	//close the file
 	close(file);
+	close(add_file);
 	}
