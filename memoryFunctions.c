@@ -69,7 +69,7 @@ void *malloc(size_t size){
   // if the memory is allocated over multiple pages
   int i =0;
 
-  while((location_copy / 4096) <= (end/4096)){
+  //while((location_copy / 4096) <= (end/4096)){
     int check = dumbSearchAlgo((void *)location_copy);
     if (check >= 0){
       // Page was either in the HOT queue already, or just put there by mprotect()
@@ -79,8 +79,8 @@ void *malloc(size_t size){
       // New page. Must add to HOT queue
       movePage((void *)location_copy, 1);
     }
-    location_copy += 4096;
-    }
+    //location_copy += 4096;
+    //}
 
   return location;
   }
@@ -103,7 +103,7 @@ void *calloc(size_t nmeb, size_t size){
 
   // if the memory is allocated over multiple pages
 
-  while((location_copy / 4096) <= (end/4096)){
+  //while((location_copy / 4096) <= (end/4096)){
     int check = dumbSearchAlgo((void *)location_copy);
     if (check >= 0){
       // Page was either in the HOT queue already, or just put there by mprotect()
@@ -113,8 +113,8 @@ void *calloc(size_t nmeb, size_t size){
       // New page. Must add to HOT queue
       movePage((void *)location_copy, 1);
     }
-    location_copy += 4096;
-   }
+    //location_copy += 4096;
+    //}
 
   return location;
   }
@@ -139,7 +139,7 @@ void *realloc(void *ptr, size_t size){
 
   // if the memory is allocated over multiple pages
 
-  while ((location_copy / 4096) <= (end/4096)){
+  // while ((location_copy / 4096) <= (end/4096)){
     int check = dumbSearchAlgo((void *)location_copy);
     if (check >= 0){
       // Page was either in the HOT queue already, or just put there by mprotect()
@@ -149,8 +149,8 @@ void *realloc(void *ptr, size_t size){
       // New page. Must add to HOT queue
       movePage((void *)location_copy, 1);
     }
-    location_copy += 4096;
-  }
+    //location_copy += 4096;
+    //}
 
   return location;
   }
@@ -299,13 +299,14 @@ int mprotect(void *addr, size_t len, int prot){
   int direction = 0;
   if (prot == (PROT_READ | PROT_WRITE)) direction = 1;
 
+  orig_mprotect original_mprotect;
+  original_mprotect = (orig_mprotect)dlsym(RTLD_NEXT, "mprotect");
+  int ret_value = original_mprotect(addr, len, prot);
 
   // dumps contents of page and moves within queues
   dumpPage(addr, direction);
-        
-  orig_mprotect original_mprotect;
-  original_mprotect = (orig_mprotect)dlsym(RTLD_NEXT, "mprotect");
-  return original_mprotect(addr, len, prot);
+
+  return ret_value;
 }
 
 /* 
@@ -315,6 +316,7 @@ int mprotect(void *addr, size_t len, int prot){
 void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
   int temp = 0;
   if (info->si_code == SEGV_MAPERR) temp = -1;
+  if (temp == -1) printf("**********************************************************************************************\n");
   uintptr_t mem_address = (uintptr_t)(info->si_addr);
   uintptr_t page_addr = (uintptr_t)(mem_address & PAGEBASE_MASK);
 
