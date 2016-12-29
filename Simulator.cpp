@@ -79,25 +79,23 @@ int main(int argc, char *argv[]){
   long long time_used = 0;
   long long comp_time_used = 0;
   page_info current_page;
-
+  int print = 0;
 
   printf("%llu\n", mem_size/4096);
   //actual meat of processing
   while (fread(&current_page, sizeof(page_info), 1, file) == 1){
-    fprintf(tester, "%lu\n", ((current_page.address<<1)>>1));
-    //printf("MADE IT\n");
-    //printf("%p\n", (void *)(((current_page.address)<<1)>>1));
+    print = 1;
+    //fprintf(tester, "%lu\n", ((current_page.address<<1)>>1));
     int index = searchQueue((((current_page.address)<<1)>>1));
-    //if (index != -1) printf("NON-NEGATIVE: %d\n", index);
-    //printf("ONE %d\n", index);
     pushBackQueue(current_page, index);
-    //printf("TWO\n");
+
     if((((current_page.address)<<1)>>1) != current_page.address){
       if((index == -1 && mem_used+4096 > mem_size) /*|| index > ((mem_size/4096)*1.10)*/){
-	fprintf(problems, "%lu\n", ((current_page.address<<1)>>1));
+	fprintf(tester, "%lu, %lu\n", current_page.address, ((current_page.address<<1)>>1));
 	printf("Address: %lu      %lu\n", current_page.address, ((current_page.address)<<1)>>1);
 	printf("Index: %d\n", index);
         comp_time_used += disk_time;
+	print = 0;
       }
       if((index == -1 && mem_used+4096 > mem_size) || (index > mem_size/4096)){
         time_used += disk_time;
@@ -106,6 +104,7 @@ int main(int argc, char *argv[]){
     if (index == -1){
       mem_used += 4096;
     }
+    if (print) fprintf(tester, "%lu\n", current_page.address);
   }
   printf("Total time spent on swaps is %llu ns\n", time_used);
   printf("With \"compression\" total time spent on swaps is %llu ns\n", comp_time_used);
