@@ -41,6 +41,11 @@ int *queueCOLDb;
 int file;
 int add_file;
 
+//tracker for empties
+int empties = 0;
+static int faults = 0;
+static int prot_in = 0;
+
 
 //============================ METHOD DECLARATIONS ============================
 
@@ -67,20 +72,19 @@ void *malloc(size_t size){
   uintptr_t end = location_copy + size;
 
   // if the memory is allocated over multiple pages
-  int i =0;
 
-  //while((location_copy / 4096) <= (end/4096)){
-    int check = dumbSearchAlgo((void *)location_copy);
+  while((location_copy / 4096) <= (end/4096)){
+    int check = dumbSearchAlgo(location);
     if (check >= 0){
       // Page was either in the HOT queue already, or just put there by mprotect()
       //return location;
     }
     else{
       // New page. Must add to HOT queue
-      movePage((void *)location_copy, 1);
+      movePage(location, 1);
     }
-    //location_copy += 4096;
-    //}
+    location_copy += 4096;
+    }
 
   return location;
   }
@@ -103,7 +107,7 @@ void *calloc(size_t nmeb, size_t size){
 
   // if the memory is allocated over multiple pages
 
-  //while((location_copy / 4096) <= (end/4096)){
+  while((location_copy / 4096) <= (end/4096)){
     int check = dumbSearchAlgo((void *)location_copy);
     if (check >= 0){
       // Page was either in the HOT queue already, or just put there by mprotect()
@@ -113,8 +117,8 @@ void *calloc(size_t nmeb, size_t size){
       // New page. Must add to HOT queue
       movePage((void *)location_copy, 1);
     }
-    //location_copy += 4096;
-    //}
+    location_copy += 4096;
+    }
 
   return location;
   }
@@ -139,7 +143,7 @@ void *realloc(void *ptr, size_t size){
 
   // if the memory is allocated over multiple pages
 
-  // while ((location_copy / 4096) <= (end/4096)){
+  while ((location_copy / 4096) <= (end/4096)){
     int check = dumbSearchAlgo((void *)location_copy);
     if (check >= 0){
       // Page was either in the HOT queue already, or just put there by mprotect()
@@ -149,8 +153,8 @@ void *realloc(void *ptr, size_t size){
       // New page. Must add to HOT queue
       movePage((void *)location_copy, 1);
     }
-    //location_copy += 4096;
-    //}
+    location_copy += 4096;
+    }
 
   return location;
   }
@@ -185,17 +189,19 @@ void dumpPage(void *addr, int direction){
 	if (pageNumber == 0){
 		return;	// Do not dump if it is an empty page
 	}
-	if (direction == 1) pageNumber = pageNumber | INBOUND_MASK;
+	if (direction == 1) pageNumber = (pageNumber | INBOUND_MASK);
 
 	// write the page number, and direction of queue movement
 	void *pageAddr = (void *)((uintptr_t)pageNumber << 12);
 	void *pageNumPtr = &pageNumber;
 	void *pageAddrPtr = &pageAddr;
 
+	//if (direction == 1) printf("%d  %p\n", prot_in, (void *)pageNumber);
 	int err = write(file, pageNumPtr, sizeof(pageNumPtr));
-	write(add_file, pageNumPtr, sizeof(pageNumPtr));
+	//write(add_file, pageNumPtr, sizeof(pageNumPtr));
 	if (err != 8){
-	  file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/SPEC_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR));
+	  printf("\n number error was number: %d **********\n", errno);
+	  file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/SPEC_Dump.txt", (O_RDWR | O_CREAT | O_APPEND), (S_IRUSR | S_IWUSR));
 	  err = write(file, pageNumPtr, sizeof(pageNumPtr));
 	  printf("\n********* response to error in # was writing %d bytes %d **********\n", err, errno);
 	}
@@ -203,7 +209,8 @@ void dumpPage(void *addr, int direction){
 	// write the contents of the page
 	err = write(file, pageAddrPtr, (size_t)PAGE_SIZE);
 	if (err != 4096){
-	  file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/SPEC_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR));
+	  printf("\n page error was number: %d **********\n", errno);
+	  file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/SPEC_Dump.txt", (O_RDWR | O_CREAT | O_APPEND), (S_IRUSR | S_IWUSR));
 	  err = write(file, pageAddrPtr, (size_t)PAGE_SIZE);
 	  printf("\n********* response to error in page was writing %d bytes %d **********\n", err, errno);
 	}
@@ -287,6 +294,9 @@ void movePage(void *addr, int direction){
 			//protect this page to induce a SIGSEGV signal when referenced
 			mprotect((void *)addressOfPage, PAGE_SIZE, PROT_NONE);
 		}
+		else{
+		  empties++;
+		}
 	}
 }
 
@@ -305,7 +315,7 @@ int mprotect(void *addr, size_t len, int prot){
 
   // dumps contents of page and moves within queues
   dumpPage(addr, direction);
-
+  if (direction == 1) prot_in++;
   return ret_value;
 }
 
@@ -314,6 +324,7 @@ int mprotect(void *addr, size_t len, int prot){
  * unprotecting it (which dumps and moves the page in the process)
  */
 void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
+  
   int temp = 0;
   if (info->si_code == SEGV_MAPERR) temp = -1;
   if (temp == -1) printf("**********************************************************************************************\n");
@@ -322,6 +333,7 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
 
   movePage((void *)page_addr, 1);
   mprotect((void *)page_addr, PAGE_SIZE, (PROT_READ | PROT_WRITE));
+  faults++;
 
 }
 
@@ -386,8 +398,8 @@ void _init_(){
 
 
 
-	file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/SPEC_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR)); // took out the appending
-	add_file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/mem_address_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR));
+	file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/SPEC_Dump.txt", (O_RDWR | O_CREAT | O_APPEND), (S_IRUSR | S_IWUSR));
+	//add_file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/mem_address_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR));
 }
 
 __attribute__((destructor))
@@ -395,4 +407,6 @@ void _atClose_(){
 	//close the file
 	close(file);
 	close(add_file);
+	//printf("Number of empty pages is: %d\n", empties);
+	//printf("Number of faults is: %d    prot_in: %d\n", faults, prot_in);
 	}

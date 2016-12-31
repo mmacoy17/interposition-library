@@ -90,7 +90,7 @@ int main(int argc, char *argv[]){
     pushBackQueue(current_page, index);
 
     if((((current_page.address)<<1)>>1) != current_page.address){
-      if((index == -1 && mem_used+4096 > mem_size) /*|| index > ((mem_size/4096)*1.10)*/){
+      if((index == -1 )/*&& mem_used+4096 > mem_size) /*|| index > ((mem_size/4096)*1.10)*/){
 	fprintf(tester, "%lu, %lu\n", current_page.address, ((current_page.address<<1)>>1));
 	printf("Address: %lu      %lu\n", current_page.address, ((current_page.address)<<1)>>1);
 	printf("Index: %d\n", index);
