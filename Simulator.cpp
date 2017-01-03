@@ -11,10 +11,10 @@ extern "C" {
 
 int num_cache = 11;
 FILE *file;
-long long mem_size = 104857600/5; // 100MB of RAM
-int queue_size = 4000;           // number of pages
+long long mem_size;// = 20971520*3; // 20MB*3 of RAM
+int queue_size;// = 2000;           // number of pages
 long long trace_mem_size;
-long long disk_time = 400000000; // in ms
+long long disk_time = 4000000; // in ns
 double perc_size_post_comp = 1.0;
 int count = 0;
 
@@ -55,8 +55,8 @@ int searchQueue(WK_word address){
 int main(int argc, char *argv[]){
   
   // ensuring proper use
-  if (argc != 2){
-    printf("Invalid use of command. Include one input file.\n");
+  if (argc != 4){
+    printf("Invalid use of command. Include one input file, memory size and queue size.\n");
     return -1;
   }
 
@@ -66,11 +66,15 @@ int main(int argc, char *argv[]){
     return -2;
   }
   
+  mem_size = strtoll(argv[2], NULL, 10);
+  queue_size = strtol(argv[3], NULL, 10);
   trace_mem_size = queue_size*4096;
   if (trace_mem_size >= mem_size){
     printf("Memory size must be greater than QUEUE_SIZE*4096\n");
     return -3;
   }
+
+  FILE *output = fopen("Final_Output.txt", "a+");
 
   // use array to define different compression levels
   double comp_perc_level[] = {0.0, .10, .20, .30, .40, .50, .60, .70, .80, .90, 1.0};
@@ -130,8 +134,17 @@ int main(int argc, char *argv[]){
     }
   }
   int i;
+  int index = 0;
+  double min_percent = 1.0;
   for (i=0; i<num_cache; i++){
-    printf("Total time spent on swaps with %d percent additional memory is: %f s\n", (int)(comp_perc_level[i]*100), (double)total_times[i]/1000000000);
+    printf("%f\n", (double)total_times[i]/1000000000);
+    if(((double)total_times[i]/(double)total_times[0]) < min_percent){
+      index = i;
+      min_percent = (double)total_times[i]/total_times[0];
+    }
   }
   printf("Average comp and decomp is: %f\n", (double)(comp_decomp/comp_count)/1000000000);
+
+  fprintf(output, "%s %llu %f %f\n", argv[1], 
+mem_size, comp_perc_level[index], min_percent);
 }
