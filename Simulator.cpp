@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "framework.hpp"
+#include "Allocator.h"
 
 extern "C" {
 	#include "WK.h"
@@ -74,10 +75,13 @@ int main(int argc, char *argv[]){
     return -3;
   }
 
-  FILE *output = fopen("Final_Output.txt", "a+");
+  FILE *output = fopen(/*"Final_Output.txt"*/ "Test_file.txt", "a+");
 
   // use array to define different compression levels
   double comp_perc_level[] = {0.0, .10, .20, .30, .40, .50, .60, .70, .80, .90, 1.0};
+
+  // array of Allocator trakers
+  Allocator *fragmentation = new Allocator[num_cache];
 
   // use array to store total swap times
   long long total_times[num_cache];
@@ -100,6 +104,7 @@ int main(int argc, char *argv[]){
   
   //actual meat of processing
   while (fread(&current_page, sizeof(page_info), 1, file) == 1){
+    //update the average compression
     perc_size_post_comp = ((perc_size_post_comp*count) + ((double)current_page.comp_size/4096))/(count+1);
     count++;
 
@@ -116,14 +121,21 @@ int main(int argc, char *argv[]){
 
         // REQUIRES LIST OF COMPRESSION PERCENTAGES IS LEAST TO GREATEST
         int i=num_cache-1; 
+        // while the page is past the uncompressed pages in memory 
         while((index+queue_size > (int)((mem_size/4096)*(1-comp_perc_level[i]))) && i >= 0){
+          // if the page is in the compressed region
           if (index+queue_size <= (int)((mem_size/4096)*(1-comp_perc_level[i]))+(comp_perc_level[i]*mem_size/(perc_size_post_comp*4096))){
             total_times[i] += current_page.decomp_time;
             total_times[i] += current_page.comp_time;
             comp_decomp += current_page.comp_time+current_page.decomp_time;
             comp_count++;
           }
-          else total_times[i] += disk_time;
+          // if the page is on the disk
+          // add allocator stuff here?
+          else{
+            total_times[i] += disk_time;
+            fragmentation[i].add(current_page.comp_size);
+          }
           
           i--;
         }
