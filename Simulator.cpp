@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string>
 #include "framework.hpp"
 #include "Allocator.h"
 
@@ -48,6 +49,47 @@ int searchQueue(WK_word address){
     count++;
   }
   return -1;
+}
+
+void printHistograms(char *in_file, Allocator *frags){
+  unsigned int* histograms[num_cache];
+
+  std::string input_file(in_file);
+  std::string fileName = "hist_" + input_file + ".csv";
+  const char *name = fileName.c_str();
+  FILE *out_file = fopen(name, "a+");
+  fprintf(out_file, "\n%llu\n", mem_size);
+
+  int i;
+  for (i=0; i<num_cache; i++){
+    histograms[i] = frags[i].getHistogram();
+  }
+
+
+  printf("GOT HISTOGRAMS\n");
+  int max_length = 0;
+  int tracker;
+  for (i=0; i<num_cache; i++){
+    tracker = 0;
+    while (histograms[i][tracker] != 0){
+      tracker++;
+    }
+    if (tracker > max_length)
+      max_length = tracker;
+  }
+  
+  printf("GOT MAX_LENGTH: %d\n", max_length);
+  for (i=0; i<max_length; i++){
+    int j;
+    for (j=0; j<num_cache; j++){
+      if(histograms[j][i] != 0)
+	fprintf(out_file, "%d,", histograms[j][i]);
+      else
+	fprintf(out_file, " ,");
+    }
+    fprintf(out_file, "\n");
+  }
+  printf("MADE IT\n");
 }
 
 
@@ -145,18 +187,24 @@ int main(int argc, char *argv[]){
       mem_used += 4096;
     }
   }
+  
   int i;
   int index = 0;
   double min_percent = 1.0;
   for (i=0; i<num_cache; i++){
     printf("%f\n", (double)total_times[i]/1000000000);
+    printf("Frag average: %f,  %d\n", fragmentation[i].getAverage(), fragmentation[i].getInsert());
+
     if(((double)total_times[i]/(double)total_times[0]) < min_percent){
       index = i;
       min_percent = (double)total_times[i]/total_times[0];
     }
   }
+  printHistograms(argv[1], fragmentation);
   printf("Average comp and decomp is: %f\n", (double)(comp_decomp/comp_count)/1000000000);
 
-  fprintf(output, "%s %llu %f %f\n", argv[1], 
-mem_size, comp_perc_level[index], min_percent);
+  fprintf(output, "%s %llu %f %f\n", argv[1], mem_size, comp_perc_level[index], min_percent);
+
+
+ 
 }
