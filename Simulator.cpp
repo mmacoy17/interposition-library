@@ -10,20 +10,32 @@ extern "C" {
 	#include "WK.h"
 }
 
+// constansts
+const int num_cache = 11;
+const long long disk_time = 4000000; // in ns
+const int pages_per_fetch = 8;
+const int pre_fetch_queue_length = 3;
+const int pre_fetch_size = 4096*pages_per_fetch*pre_fetch_queue_length; //page_size*number
+// use array to define different compression levels
+const double comp_perc_level[] = {0.0, .10, .20, .30, .40, .50, .60, .70, .80, .90, 1.0};
+page_info fetched[num_cache][pre_fetch_queue_length][pages_per_fetch];
 
-int num_cache = 11;
+// determined from command line inputs
 FILE *file;
 long long mem_size;// = 20971520*3; // 20MB*3 of RAM
 int queue_size;// = 2000;           // number of pages
 long long trace_mem_size;
-long long disk_time = 4000000; // in ns
+
+// tracked while running
 double perc_size_post_comp = 1.0;
 int count = 0;
+long long mem_used = 0;
+int pre_fetch_front[num_cache];
+int num_fetch_hits[num_cache];
 
 page_info *queueF;// = (page_info *)malloc(sizeof(page_info)*25000);
 page_info *queueB;// = queueF;
 
-long long mem_used = 0;
 
 void pushBackQueue(page_info move, int index){
   if (index == -1 && (queueB+1)>=queueF+500000) printf("END OF QUEUE REACHED****\n");
@@ -51,6 +63,45 @@ int searchQueue(WK_word address){
   return -1;
 }
 
+int searchPreFetch(WK_word address, int cache){
+  int i;
+  int j;
+  for (i=0; i<pre_fetch_queue_length; i++){
+    for(j=0; j<pages_per_fetch; j++){
+      if ((((fetched[cache][i][j].address)<<1)<<1) == address)
+        return 1;
+    }
+  }
+  return 0;
+}
+
+void preFetch(int index, int comp_level){
+  // front and back are the number elements around the index to prefetch
+  int front = 0;
+  int i = pages_per_fetch/2;
+  while((index+queue_size-front-1 > (int)((mem_size/4096)*(1-comp_perc_level[comp_level]))) && i > 0){
+    front++;
+    i--;
+  }
+  int back = 0;
+  int j = pages_per_fetch-front;
+  while((index+queue_size+back+1 <= (int)((mem_size/4096)*(1-comp_perc_level[comp_level]))
+    +(comp_perc_level[comp_level]*mem_size/(perc_size_post_comp*4096))) && j > 0){
+    back++;
+    j--;
+  }
+  front = pages_per_fetch-back;
+
+  j=0;
+  page_info *location = queueF + index;
+  for(i=1; i<=front; i++){
+    fetched[comp_level][pre_fetch_front[comp_level]][j++] = *(location-i);
+  }
+  for (i=1; i<=back; i++){
+    fetched[comp_level][pre_fetch_front[comp_level]][j++] = *(location+i);
+  }
+}
+
 void printHistograms(char *in_file, Allocator *frags){
   unsigned int* histograms[num_cache];
 
@@ -66,7 +117,6 @@ void printHistograms(char *in_file, Allocator *frags){
   }
 
 
-  printf("GOT HISTOGRAMS\n");
   int max_length = 0;
   int tracker;
   for (i=0; i<num_cache; i++){
@@ -78,7 +128,6 @@ void printHistograms(char *in_file, Allocator *frags){
       max_length = tracker;
   }
   
-  printf("GOT MAX_LENGTH: %d\n", max_length);
   for (i=0; i<max_length; i++){
     int j;
     for (j=0; j<num_cache; j++){
@@ -89,7 +138,6 @@ void printHistograms(char *in_file, Allocator *frags){
     }
     fprintf(out_file, "\n");
   }
-  printf("MADE IT\n");
 }
 
 
@@ -109,7 +157,8 @@ int main(int argc, char *argv[]){
     return -2;
   }
   
-  mem_size = strtoll(argv[2], NULL, 10);
+  // account for prefetch and compression hiding
+  mem_size = strtoll(argv[2], NULL, 10) - pre_fetch_size - 4096; 
   queue_size = strtol(argv[3], NULL, 10);
   trace_mem_size = queue_size*4096;
   if (trace_mem_size >= mem_size){
@@ -119,10 +168,7 @@ int main(int argc, char *argv[]){
 
   FILE *output = fopen(/*"Final_Output.txt"*/ "Test_file.txt", "a+");
 
-  // use array to define different compression levels
-  double comp_perc_level[] = {0.0, .10, .20, .30, .40, .50, .60, .70, .80, .90, 1.0};
-
-  // array of Allocator trakers
+  // array of Allocator trackers
   Allocator *fragmentation = new Allocator[num_cache];
 
   // use array to store total swap times
@@ -158,19 +204,24 @@ int main(int argc, char *argv[]){
       if (index == -1){
           printf("***ERROR: Page being re-inserted without ever leaving\n");
           return -4;
-      }  
+      }
       else{
 
         // REQUIRES LIST OF COMPRESSION PERCENTAGES IS LEAST TO GREATEST
         int i=num_cache-1; 
         // while the page is past the uncompressed pages in memory 
         while((index+queue_size > (int)((mem_size/4096)*(1-comp_perc_level[i]))) && i >= 0){
+          int in_pre_fetch = searchPreFetch((((current_page.address)<<1)>>1), i);
+          if(in_pre_fetch){
+            num_fetch_hits[i]++;
+          }
           // if the page is in the compressed region
-          if (index+queue_size <= (int)((mem_size/4096)*(1-comp_perc_level[i]))+(comp_perc_level[i]*mem_size/(perc_size_post_comp*4096))){
+          else if (index+queue_size <= (int)((mem_size/4096)*(1-comp_perc_level[i]))+(comp_perc_level[i]*mem_size/(perc_size_post_comp*4096))){
             total_times[i] += current_page.decomp_time;
-            total_times[i] += current_page.comp_time;
+            //total_times[i] += current_page.comp_time;
             comp_decomp += current_page.comp_time+current_page.decomp_time;
             comp_count++;
+            preFetch(index, i);
           }
           // if the page is on the disk
           // add allocator stuff here?
@@ -194,6 +245,7 @@ int main(int argc, char *argv[]){
   for (i=0; i<num_cache; i++){
     printf("%f\n", (double)total_times[i]/1000000000);
     printf("Frag average: %f,  %d\n", fragmentation[i].getAverage(), fragmentation[i].getInsert());
+    printf("Pre-fetching hits: %d\n", num_fetch_hits[i]);
 
     if(((double)total_times[i]/(double)total_times[0]) < min_percent){
       index = i;
