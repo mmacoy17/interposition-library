@@ -254,7 +254,7 @@ int main(int argc, char *argv[]){
 
 	struct timespec start_time, end_time, total_time;
 
-	lzo1Algo test;
+	WKAlgo test;
 
 	WK_word* addr;
 	WK_word* src_buf;

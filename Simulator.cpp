@@ -14,8 +14,8 @@ extern "C" {
 // constansts
 const int num_cache = 11;
 const long long disk_time = 4000000; // in ns
-const double multiple = 1.5;
-const int pages_per_fetch = 128;
+const double multiple = 1.0;
+const int pages_per_fetch = 0;
 const int pre_fetch_queue_length = 3;
 const int pre_fetch_size = 4096*pages_per_fetch*pre_fetch_queue_length; //page_size*number
 // use array to define different compression levels
@@ -197,7 +197,7 @@ int main(int argc, char *argv[]){
     return -3;
   }
 
-  FILE *output = fopen(/*"Final_Output.txt"*/ "Test_file.txt", "a+");
+  FILE *output = fopen(/*"Final_Output.txt"*/ "ZZOutput_file.txt", "a+");
   
   std::string input_file(argv[1]);
   std::string memory(argv[2]);

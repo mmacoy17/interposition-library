@@ -25,7 +25,8 @@
  * export QUEUE_SIZE = ""
  */
 
-
+// Used to determine if this is actually running a SPEC benchmark
+int VALID;
  
 int queueSizeHOT;
 
@@ -66,6 +67,10 @@ void *malloc(size_t size){
   orig_malloc original_malloc;
   original_malloc = (orig_malloc)dlsym(RTLD_NEXT, "malloc");
   void *location = original_malloc(size);
+
+  if(!VALID){
+    return location;
+  }
  
 
   uintptr_t location_copy = (uintptr_t)location;
@@ -102,6 +107,10 @@ void *calloc(size_t nmeb, size_t size){
   original_calloc = (orig_calloc)dlsym(RTLD_NEXT, "calloc");
   void *location = original_calloc(nmeb, size);
 
+  if (!VALID){
+    return location;
+  }
+
   uintptr_t location_copy = (uintptr_t)location;
   uintptr_t end = location_copy + nmeb*size;
 
@@ -136,7 +145,7 @@ void *realloc(void *ptr, size_t size){
   original_realloc = (orig_realloc)dlsym(RTLD_NEXT, "realloc");
   void *location = original_realloc(ptr, size);
 
-  if (location == NULL) return location;
+  if (location == NULL || !VALID) return location;
 
   uintptr_t location_copy = (uintptr_t)location;
   uintptr_t end = location_copy + size;
@@ -313,6 +322,10 @@ int mprotect(void *addr, size_t len, int prot){
   original_mprotect = (orig_mprotect)dlsym(RTLD_NEXT, "mprotect");
   int ret_value = original_mprotect(addr, len, prot);
 
+  if (!VALID){
+    return ret_value;
+  }
+
   // dumps contents of page and moves within queues
   dumpPage(addr, direction);
   if (direction == 1) prot_in++;
@@ -331,7 +344,9 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
   uintptr_t mem_address = (uintptr_t)(info->si_addr);
   uintptr_t page_addr = (uintptr_t)(mem_address & PAGEBASE_MASK);
 
-  movePage((void *)page_addr, 1);
+  if (VALID){
+    movePage((void *)page_addr, 1);
+  }
   mprotect((void *)page_addr, PAGE_SIZE, (PROT_READ | PROT_WRITE));
   faults++;
 
@@ -395,11 +410,40 @@ void _init_(){
 	queueCOLDf = (queueHOTf + sizeof(int)*(queueSizeHOT+1));
 	queueCOLDb = queueCOLDf;
 
-
-
-
-	file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/SPEC_Dump.txt", (O_RDWR | O_CREAT | O_APPEND), (S_IRUSR | S_IWUSR));
+	pid_t idn = getpid();
+	char id[sizeof(idn)];
+	int i = 0;
+	while (idn != 0){
+	  int temp = idn%10;
+	  id[i++] = temp+48;
+	  idn = idn/10;
+	}
+	extern char *program_invocation_short_name;
+	
+	//printf("\n%s\n", program_invocation_short_name);
+	char fileName[73+35+1] = {'/','h','o','m','e','/','c','l','a','s','s','1','7','/','m','m','a','c','o','y','1','7','/','T','h','e','s','i','s','T','e','s','t','C','o','d','e',
+				 '/','i','n','t','e','r','p','o','s','i','t','i','o','n','-','l','i','b','r','a','r','y','/','S','P','E','C','_','D','u','m','p','.','t','x','t'};
+	/*int j;
+	for (j=0; j<i; j++){
+	  fileName[73+j] = id[j];
+	  }*/
+	int j=0;
+	while (program_invocation_short_name[j] != '\0'){
+	  fileName[73+j] = program_invocation_short_name[j];
+	  j++;
+	}
+	fileName[73+j] = '\0';
+	
+	if (j>=25){
+	  VALID = 1;
+	  file = open(&fileName, (O_RDWR | O_CREAT | O_APPEND), (S_IRUSR | S_IWUSR));
+	}
+	else{
+	  VALID = 0;
+	  //file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/SPEC_Dump.txt", (O_RDWR | O_CREAT | O_APPEND), (S_IRUSR | S_IWUSR)); //74 chars
 	//add_file = open("/home/class17/mmacoy17/ThesisTestCode/interposition-library/mem_address_Dump.txt", (O_RDWR | O_CREAT), (S_IRUSR | S_IWUSR));
+
+	}
 }
 
 __attribute__((destructor))
