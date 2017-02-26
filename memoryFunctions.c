@@ -434,7 +434,7 @@ void _init_(){
 	}
 	fileName[73+j] = '\0';
 	
-	if (j>=25){
+	if (j>=25 || program_invocation_short_name[0] != 's'){
 	  VALID = 1;
 	  file = open(&fileName, (O_RDWR | O_CREAT | O_APPEND), (S_IRUSR | S_IWUSR));
 	}
