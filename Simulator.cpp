@@ -11,6 +11,12 @@ extern "C" {
 	#include "WK.h"
 }
 
+
+//compile with -O3
+//tool that reads through the traces and prints out the page numbers
+//ratio of hits to pre-fetching since last dump
+//what-if on multiples 
+
 // constansts
 const int num_cache = 11;
 const long long disk_time = 4000000; // in ns
@@ -38,6 +44,9 @@ long long num_fetch_hits[num_cache];
 long long num_fetch_possible[num_cache];
 //int fetch_safe[num_cache];
 double locality = 0;
+
+int temp_pre_possible[num_cache];
+int temp_pre_hits[num_cache];
 
 page_info *queueF;// = (page_info *)malloc(sizeof(page_info)*25000);
 page_info *queueB;// = queueF;
@@ -121,7 +130,7 @@ void spatialPreFetch(int index, int comp_level, int offset){
   
   while (location < queueB){
     int i = 0;
-    int dif = (((location->address)<<1)>>1) - (((queueF + index)->address)<<1)>>1;
+    int dif = (((location->address)<<1)>>1) - ((((queueF + index)->address)<<1)>>1);
     if (dif<=pages_per_fetch/2 && dif >=-pages_per_fetch/2 && dif != 0){
       //printf("%d\n", i);
       fetched[comp_level][pre_fetch_front[comp_level]][i++] = *location;
@@ -133,7 +142,7 @@ void spatialPreFetch(int index, int comp_level, int offset){
   pre_fetch_front[comp_level] = (pre_fetch_front[comp_level] + 1) % pre_fetch_queue_length;
 }
 
-void printHistograms(char *in_file, Allocator *frags){
+/*void printHistograms(char *in_file, Allocator *frags){
   unsigned int* histograms[num_cache];
 
   std::string input_file(in_file);
@@ -169,13 +178,12 @@ void printHistograms(char *in_file, Allocator *frags){
     }
     fprintf(out_file, "\n");
   }
-}
+  }*/
 
 
 
 
 int main(int argc, char *argv[]){
-  printf("HERE?\n");
   
   // ensuring proper use
   if (argc != 4){
@@ -205,12 +213,12 @@ int main(int argc, char *argv[]){
   std::string fileName = "miss_" + input_file + memory + "_.99";
   const char *name = fileName.c_str();
   FILE *miss_file = fopen(name, "w+");
-  //double miss_curve[250000];
+  //double *miss_curve = (double *)malloc(sizeof(double)*2500000;
   long long curve_count = 0;
   
 
   // array of Allocator trackers
-  Allocator *fragmentation = new Allocator[num_cache];
+  //Allocator *fragmentation = new Allocator[num_cache];
 
   // use array to store total swap times
   long long total_times[num_cache];
@@ -237,21 +245,21 @@ int main(int argc, char *argv[]){
   
   //actual meat of processing
   while (fread(&current_page, sizeof(page_info), 1, file) == 1){
-    printf("Break 0, ");
+    //printf("Break 0, ");
     //update the average compression
     perc_size_post_comp = ((perc_size_post_comp*count) + (((double)current_page.comp_size/multiple)/4096))/(count+1);
     count++;
 
-    printf("1, ");
+    //printf("1, ");
     
-    if (count%10000 == 0)
-      printf("%llu\n", count);
+    //if (count%10000 == 0)
+    //printf("%llu\n", count);
 
     //fprintf(tester, "%lu\n", ((current_page.address<<1)>>1));
     int index = searchQueue((((current_page.address)<<1)>>1));
     pushBackQueue(current_page, index);
 
-    printf("2, ");
+    //printf("2, ");
 
     if((((current_page.address)<<1)>>1) != current_page.address){
       if (index == -1){
@@ -259,36 +267,46 @@ int main(int argc, char *argv[]){
           return -4;
       }
       
-      printf("3, ");
 
       else{
+	//printf("3, ");
 	//curve_count++;
 	locality = locality*alpha + index*(1-alpha);
-	//if (curve_count%50 == 0){
-	  //miss_curve[curve_count/50] = locality;
-	//}
+	if (curve_count%500 == 0){
+	  fprintf(miss_file, "%f", locality);
+	  int i;
+	  for(i=0; i<num_cache; i++){
+	    if(temp_pre_possible[i] != 0)
+	      fprintf(miss_file, " %f", (double)temp_pre_hits[i]/(double)temp_pre_possible[i]);
+	    else
+	      fprintf(miss_file, " NA");
+	    temp_pre_hits[i] = 0;
+	    temp_pre_possible[i] = 0;
+	  }
+	  fprintf(miss_file, "\n");
+	  }
 
         // REQUIRES LIST OF COMPRESSION PERCENTAGES IS LEAST TO GREATEST
         int i=num_cache-1; 
         // while the page is past the uncompressed pages in memory 
 
-	printf("4, ");
+	//printf("4, ");
 
         while((index+queue_size > (int)((mem_size/4096)*(1-comp_perc_level[i]))) && i >= 0){
-	  printf("5, ");
+	  //printf("5, ");
 
           int in_pre_fetch = searchPreFetch((((current_page.address)<<1)>>1), i);
+	  temp_pre_possible[i]++;
 	  num_fetch_possible[i]++;
           if(in_pre_fetch){
             num_fetch_hits[i]++;
+	    temp_pre_hits[i]++;
           }
-
-	  printf("6, ");
 
           // if the page is in the compressed region
           else if (index+queue_size <= (int)((mem_size/4096)*(1-comp_perc_level[i]))+(comp_perc_level[i]*mem_size/(perc_size_post_comp*4096))){
 
-	    printf("7, ");
+	    //printf("6, ");
 
             total_times[i] += current_page.decomp_time;
             comp_times[i] += current_page.comp_time;
@@ -298,22 +316,20 @@ int main(int argc, char *argv[]){
 	    //int offset = (int)((mem_size/4096)*(1-comp_perc_level[i]))+(comp_perc_level[i]*mem_size/(perc_size_post_comp*4096));
 	    //spatialPreFetch(index, i, offset);
 
-	    printf("7, ");
+	    //printf("7, ");
 	    
           }
           // if the page is on the disk
           // add allocator stuff here?
-
-	  printf("8, ");
-
           else{
+	    //printf("8, ");
             total_times[i] += disk_time;
-            fragmentation[i].add(current_page.comp_size);
+            //fragmentation[i].add(current_page.comp_size);
           }
           
           i--;
 
-	  printf("9, ");
+	  //printf("9, ");
         }
       }
     }
@@ -321,7 +337,7 @@ int main(int argc, char *argv[]){
       mem_used += 4096;
     }
 
-    printf("10\n");
+    //printf("10\n");
   }
   
   printf("MADE IT THROUGH THE MAIN LOOP OF ALL PAGES! *******************************************************\n");
@@ -341,12 +357,12 @@ int main(int argc, char *argv[]){
       min_percent = (double)total_times[i]/total_times[0];
     }
   }
-  printHistograms(argv[1], fragmentation);
-  printf("Average comp and decomp is: %f\n", (double)(comp_decomp/comp_count)/1000000000);
-
+  //fflush
+  //printHistograms(argv[1], fragmentation);
   
   fprintf(output, "%s %s %f %f %f %d\n", argv[1], argv[2], comp_perc_level[index], min_percent, (double)num_fetch_hits[index]/(double)num_fetch_possible[index], pages_per_fetch*pre_fetch_queue_length);
 
+  printf("Average comp and decomp is: %f\n", (double)(comp_decomp/comp_count)/1000000000);
 
   //while (miss_curve[i]!= 0){
   //  fprintf(miss_file, "%f\n", miss_curve[i++]);
