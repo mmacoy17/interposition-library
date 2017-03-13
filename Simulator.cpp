@@ -8,7 +8,7 @@
 #include "Allocator.h"
 
 extern "C" {
-	#include "WK.h"
+	#include "WK.h" 
 }
 
 
@@ -17,10 +17,13 @@ extern "C" {
 //ratio of hits to pre-fetching since last dump
 //what-if on multiples 
 
+//g++ -O1 -fthread-jumps -falign-functions -falign-loops -falign-jumps -falign-labels -fcaller-saves -fcrossjumping -fcse-follow-jumps -fcse-skip-blocks -fdelete-null-pointer-checks -fdevirtualize -fexpensive-optimizations -fgcse -finline-small-functions -findirect-inlining -fipa-cp -foptimize-sibling-calls -foptimize-strlen -fpartial-inlining -fpeephole2 -freorder-blocks-and-partition -freorder-functions -frerun-cse-after-loop -fsched-interblock -fsched-spec -fschedule-insns -fschedule-insns2 -fstrict-aliasing -fstrict-overflow -ftree-builtin-call-dce -ftree-switch-conversion -ftree-tail-merge -ftree-pre Simulator.cpp -o Simulator
+
+
 // constansts
 const int num_cache = 11;
 const long long disk_time = 4000000; // in ns
-const double multiple = 1.0;
+const double multiple = 2.0;
 const int pages_per_fetch = 128;
 const int pre_fetch_queue_length = 3;
 const int pre_fetch_size = 4096*pages_per_fetch*pre_fetch_queue_length; //page_size*number
@@ -49,29 +52,29 @@ int temp_pre_possible[num_cache];
 int temp_pre_hits[num_cache];
 
 page_info *queueF;// = (page_info *)malloc(sizeof(page_info)*25000);
-page_info *queueB;// = queueF;
+int queueB = 0; //max index into queue + 1
 
-
+//updated
 void pushBackQueue(page_info move, int index){
-  if (index == -1 && (queueB+1)>=queueF+500000) printf("END OF QUEUE REACHED****\n");
+  if (index == -1 && (queueB+1)>=500000) printf("END OF QUEUE REACHED****\n");
   page_info holder = move;
-  page_info *location = queueF + index -1;
+  int location = index -1;
   if (index == -1){
     location = queueB;
     queueB++;
   }
-  while(location >= queueF){
-    *(location+1) = *location;
+  while(location >= 0){
+    queueF[location+1] = queueF[location];
     location--;
   }
-  *queueF = holder;
+  queueF[0] = holder;
 }
 
+//updated
 unsigned int searchQueue(WK_word address){
   unsigned int count = 0;
-  page_info *location = queueF;
-  while((location+count) < queueB && count<=(mem_used/4096)){
-    if(((((location+count)->address)<<1)>>1) == address)
+  while(count < queueB && count<=(mem_used/4096)){
+    if((((queueF[count].address)<<1)>>1) == address)
       return count;
     count++;
   }
@@ -94,6 +97,7 @@ int searchPreFetch(WK_word address, int cache){
   return 0;
 }
 
+//updated
 void preFetch(int index, int comp_level){
   // front and back are the number elements around the index to prefetch
   int front = 0;
@@ -113,19 +117,19 @@ void preFetch(int index, int comp_level){
   front = pages_per_fetch-back;
   
   j=0;
-  page_info *location = queueF + index;
+  int location = index;
   //printf("Index: %d front: %d back: %d\n", index, front, back);
   for(i=1; i<=front; i++){
-    fetched[comp_level][pre_fetch_front[comp_level]][j++] = *(location-i);
+    fetched[comp_level][pre_fetch_front[comp_level]][j++] = queueF[location-i];
   }
   //printf("THIS FAR?\n");
   for (i=1; i<=back; i++){
-    fetched[comp_level][pre_fetch_front[comp_level]][j++] = *(location+i);
+    fetched[comp_level][pre_fetch_front[comp_level]][j++] = queueF[location+i];
   }
   pre_fetch_front[comp_level] = (pre_fetch_front[comp_level] + 1) % pre_fetch_queue_length;
 }
 
-void spatialPreFetch(int index, int comp_level, int offset){
+/*void spatialPreFetch(int index, int comp_level, int offset){
   page_info *location = queueF + offset;
   
   while (location < queueB){
@@ -140,7 +144,7 @@ void spatialPreFetch(int index, int comp_level, int offset){
   }
   //printf("\n");
   pre_fetch_front[comp_level] = (pre_fetch_front[comp_level] + 1) % pre_fetch_queue_length;
-}
+  }*/
 
 /*void printHistograms(char *in_file, Allocator *frags){
   unsigned int* histograms[num_cache];
@@ -206,8 +210,8 @@ int main(int argc, char *argv[]){
     return -3;
   }
 
-  FILE *output = fopen(/*"Final_Output.txt"*/ "Output_file.txt", "a+");
-  
+  FILE *output = fopen(/*"Final_Output.txt"*/ "Output_file.x1.5.txt", "a+");
+  /*
   std::string input_file(argv[1]);
   std::string memory(argv[2]);
   std::string fileName = "miss_" + input_file + memory + "_.99";
@@ -215,7 +219,7 @@ int main(int argc, char *argv[]){
   FILE *miss_file = fopen(name, "w+");
   //double *miss_curve = (double *)malloc(sizeof(double)*2500000;
   long long curve_count = 0;
-  
+  */
 
   // array of Allocator trackers
   //Allocator *fragmentation = new Allocator[num_cache];
@@ -230,7 +234,8 @@ int main(int argc, char *argv[]){
   }
 
   queueF = (page_info *)malloc(sizeof(page_info)*500000);
-  queueB = queueF;
+  if(queueF == NULL)
+    printf("MALLOC FAILED!!\n");
 
   long long time_used = 0;
   long long comp10_time_used = 0;
@@ -270,21 +275,22 @@ int main(int argc, char *argv[]){
 
       else{
 	//printf("3, ");
-	//curve_count++;
+	/*
+	curve_count++;
 	locality = locality*alpha + index*(1-alpha);
-	if (curve_count%500 == 0){
+	if (curve_count%8000 == 0){
 	  fprintf(miss_file, "%f", locality);
 	  int i;
 	  for(i=0; i<num_cache; i++){
 	    if(temp_pre_possible[i] != 0)
-	      fprintf(miss_file, " %f", (double)temp_pre_hits[i]/(double)temp_pre_possible[i]);
+	      fprintf(miss_file, " %f,", (double)temp_pre_hits[i]/(double)temp_pre_possible[i]);
 	    else
-	      fprintf(miss_file, " NA");
+	      fprintf(miss_file, " ,");
 	    temp_pre_hits[i] = 0;
 	    temp_pre_possible[i] = 0;
 	  }
 	  fprintf(miss_file, "\n");
-	  }
+	  }*/
 
         // REQUIRES LIST OF COMPRESSION PERCENTAGES IS LEAST TO GREATEST
         int i=num_cache-1; 
@@ -360,7 +366,8 @@ int main(int argc, char *argv[]){
   //fflush
   //printHistograms(argv[1], fragmentation);
   
-  fprintf(output, "%s %s %f %f %f %d\n", argv[1], argv[2], comp_perc_level[index], min_percent, (double)num_fetch_hits[index]/(double)num_fetch_possible[index], pages_per_fetch*pre_fetch_queue_length);
+  printf("%s %s %f %f %f %d %f\n", argv[1], argv[2], comp_perc_level[index], min_percent, (double)num_fetch_hits[index]/(double)num_fetch_possible[index], pages_per_fetch*pre_fetch_queue_length, 1.0/perc_size_post_comp);
+  fprintf(output, "%s %s %f %f %f %d %f\n", argv[1], argv[2], comp_perc_level[index], min_percent, (double)num_fetch_hits[index]/(double)num_fetch_possible[index], pages_per_fetch*pre_fetch_queue_length, 1.0/perc_size_post_comp);
 
   printf("Average comp and decomp is: %f\n", (double)(comp_decomp/comp_count)/1000000000);
 

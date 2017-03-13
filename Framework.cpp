@@ -248,13 +248,18 @@ struct timespec diff(struct timespec start, struct timespec end)
 int main(int argc, char *argv[]){
 
 	if (argc != 3){
-		printf("Invalid use of command. Include one input file and one output file.\n");
+		printf("Invalid use of command. Include one input file and one output file. Include final param for lzo1.\n");
 		return -1;
 	}
 
 	struct timespec start_time, end_time, total_time;
 
+
+#ifdef LZO1
 	lzo1Algo test;
+#else
+	WKAlgo test;
+#endif
 
 	WK_word* addr;
 	WK_word* src_buf;
