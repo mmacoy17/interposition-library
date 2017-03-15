@@ -23,7 +23,7 @@ extern "C" {
 // constansts
 const int num_cache = 11;
 const long long disk_time = 4000000; // in ns
-const double multiple = 2.0;
+//const double multiple = 2.0;
 const int pages_per_fetch = 128;
 const int pre_fetch_queue_length = 3;
 const int pre_fetch_size = 4096*pages_per_fetch*pre_fetch_queue_length; //page_size*number
@@ -45,7 +45,7 @@ long long mem_used = 0;
 int pre_fetch_front[num_cache];
 long long num_fetch_hits[num_cache];
 long long num_fetch_possible[num_cache];
-//int fetch_safe[num_cache];
+double prefetch_hit_rates[num_cache];
 double locality = 0;
 
 int temp_pre_possible[num_cache];
@@ -190,8 +190,8 @@ void preFetch(int index, int comp_level){
 int main(int argc, char *argv[]){
   
   // ensuring proper use
-  if (argc != 4){
-    printf("Invalid use of command. Include one input file, memory size and queue size.\n");
+  if (argc != 5){
+    printf("Invalid use of command. Include one input file, memory size, queue size and multiple.\n");
     return -1;
   }
 
@@ -210,8 +210,10 @@ int main(int argc, char *argv[]){
     return -3;
   }
 
-  FILE *output = fopen(/*"Final_Output.txt"*/ "Output_file.x1.5.txt", "a+");
-  /*
+  double multiple = strtod(argv[4], NULL);
+
+  FILE *output = fopen(/*"Final_Output.txt"*/ "Output_file.txt", "a+");
+  
   std::string input_file(argv[1]);
   std::string memory(argv[2]);
   std::string fileName = "miss_" + input_file + memory + "_.99";
@@ -219,7 +221,7 @@ int main(int argc, char *argv[]){
   FILE *miss_file = fopen(name, "w+");
   //double *miss_curve = (double *)malloc(sizeof(double)*2500000;
   long long curve_count = 0;
-  */
+  
 
   // array of Allocator trackers
   //Allocator *fragmentation = new Allocator[num_cache];
@@ -262,7 +264,10 @@ int main(int argc, char *argv[]){
 
     //fprintf(tester, "%lu\n", ((current_page.address<<1)>>1));
     int index = searchQueue((((current_page.address)<<1)>>1));
-    pushBackQueue(current_page, index);
+    
+    if (index == -1){
+      pushBackQueue(current_page, index);
+    }
 
     //printf("2, ");
 
@@ -274,23 +279,27 @@ int main(int argc, char *argv[]){
       
 
       else{
+	pushBackQueue(current_page, index);
 	//printf("3, ");
-	/*
+	
 	curve_count++;
 	locality = locality*alpha + index*(1-alpha);
-	if (curve_count%8000 == 0){
-	  fprintf(miss_file, "%f", locality);
+	if (curve_count%10000 == 0){
+	  fprintf(miss_file, "%f,", locality);
 	  int i;
 	  for(i=0; i<num_cache; i++){
-	    if(temp_pre_possible[i] != 0)
-	      fprintf(miss_file, " %f,", (double)temp_pre_hits[i]/(double)temp_pre_possible[i]);
-	    else
-	      fprintf(miss_file, " ,");
+	    if(temp_pre_possible[i] == 0)
+	      fprintf(miss_file, " %f,", prefetch_hit_rates[i]);
+	    else{
+	      prefetch_hit_rates[i] = prefetch_hit_rates[i]*alpha + ((double)temp_pre_hits[i]/(double)temp_pre_possible[i])*(1-alpha);
+	      fprintf(miss_file, " %f,", prefetch_hit_rates[i]);
+	    }
+      
 	    temp_pre_hits[i] = 0;
 	    temp_pre_possible[i] = 0;
 	  }
 	  fprintf(miss_file, "\n");
-	  }*/
+	  }
 
         // REQUIRES LIST OF COMPRESSION PERCENTAGES IS LEAST TO GREATEST
         int i=num_cache-1; 
@@ -366,8 +375,8 @@ int main(int argc, char *argv[]){
   //fflush
   //printHistograms(argv[1], fragmentation);
   
-  printf("%s %s %f %f %f %d %f\n", argv[1], argv[2], comp_perc_level[index], min_percent, (double)num_fetch_hits[index]/(double)num_fetch_possible[index], pages_per_fetch*pre_fetch_queue_length, 1.0/perc_size_post_comp);
-  fprintf(output, "%s %s %f %f %f %d %f\n", argv[1], argv[2], comp_perc_level[index], min_percent, (double)num_fetch_hits[index]/(double)num_fetch_possible[index], pages_per_fetch*pre_fetch_queue_length, 1.0/perc_size_post_comp);
+  printf("%s %s %f %f %f %d %f %f\n", argv[1], argv[2], comp_perc_level[index], min_percent, (double)num_fetch_hits[index]/(double)num_fetch_possible[index], pages_per_fetch*pre_fetch_queue_length, 1.0/perc_size_post_comp, multiple);
+  fprintf(output, "%s %s %f %f %f %d %f %f\n", argv[1], argv[2], comp_perc_level[index], min_percent, (double)num_fetch_hits[index]/(double)num_fetch_possible[index], pages_per_fetch*pre_fetch_queue_length, 1.0/perc_size_post_comp, multiple);
 
   printf("Average comp and decomp is: %f\n", (double)(comp_decomp/comp_count)/1000000000);
 
