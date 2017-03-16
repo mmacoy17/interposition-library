@@ -4,11 +4,9 @@
 
 void method(){
   int *array = (int *) malloc(sizeof(int)*40000);
-  printf("HERE\n");
   int i;
-  for (i=0; i<38; i++){
-    *(array+(i*1024)) = rand();
-    printf("%d\n",*(array+(i*1024)));
+  for (i=0; i<40000; i++){
+    array[i] = rand();
   }
 }
 
