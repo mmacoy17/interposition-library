@@ -25,7 +25,7 @@
  * export QUEUE_SIZE = ""
  */
 
-// Used to determine if this is actually running a SPEC benchmark
+// Used to determine if this is actually running a benchmark
 int VALID;
  
 int queueSizeHOT;
@@ -79,14 +79,14 @@ void *malloc(size_t size){
   // if the memory is allocated over multiple pages
 
   while((location_copy / 4096) <= (end/4096)){
-    int check = dumbSearchAlgo(location);
+    int check = dumbSearchAlgo((void *)location_copy);
     if (check >= 0){
       // Page was either in the HOT queue already, or just put there by mprotect()
       //return location;
     }
     else{
       // New page. Must add to HOT queue
-      movePage(location, 1);
+      movePage((void *)location_copy, 1);
     }
     location_copy += 4096;
     }
@@ -276,7 +276,7 @@ int locateAndRemove(int number){
  * parameter addr is the address of the page not the page number
  */
 void movePage(void *addr, int direction){
-  //printf("%s %p, %d\n", "movePage() called with the parameters: ", (void *)((((uintptr_t)addr)>>12)<<12), direction);
+  printf("%s %p, %d\n", "movePage() called with the parameters: ", (void *)((((uintptr_t)addr)>>12)<<12), direction);
 
 	if (direction == 1){
 		// start by clearing out the spot
@@ -317,12 +317,14 @@ int mprotect(void *addr, size_t len, int prot){
   // 0 indicates moving out of the HOT queue, 1 indicates moving in
   int direction = 0;
   if (prot == (PROT_READ | PROT_WRITE)) direction = 1;
+  printf("protecting: %p  %lu %d\n", addr, len, direction);
 
   orig_mprotect original_mprotect;
   original_mprotect = (orig_mprotect)dlsym(RTLD_NEXT, "mprotect");
   int ret_value = original_mprotect(addr, len, prot);
 
   if (!VALID){
+    printf("NOT VALID!!!!\n");
     return ret_value;
   }
 
@@ -340,7 +342,7 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
   
   int temp = 0;
   if (info->si_code == SEGV_MAPERR) temp = -1;
-  if (temp == -1) printf("**********************************************************************************************\n");
+  if (temp == -1) printf("ERROR ***********************************************************************\n");
   uintptr_t mem_address = (uintptr_t)(info->si_addr);
   uintptr_t page_addr = (uintptr_t)(mem_address & PAGEBASE_MASK);
 
