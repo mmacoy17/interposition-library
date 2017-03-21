@@ -25,6 +25,8 @@
  * export QUEUE_SIZE = ""
  */
 
+typedef uint64_t page_num_type;
+
 // Used to determine if this is actually running a benchmark
 int VALID;
  
@@ -32,10 +34,10 @@ int queueSizeHOT;
 
 // map a region for the queues and then set the front of the HOT queue to the front
 // of that region and the front of the COLD queue after the end of the HOT
-int *mem;
-int *queueHOTf;
-int *queueCOLDf;
-int *queueCOLDb;
+page_num_type *mem;
+page_num_type *queueHOTf;
+page_num_type *queueCOLDf;
+page_num_type *queueCOLDb;
 
 
 //File for page dumps
@@ -194,14 +196,14 @@ void free(void *ptr){
  */
 void dumpPage(void *addr, int direction){
   //printf("%s %p, %d\n", "dumpPage addr and direction: ", addr, direction);
-	uintptr_t pageNumber = (uintptr_t) PAGENUM((uintptr_t)addr);
+	page_num_type pageNumber = (page_num_type) PAGENUM((page_num_type)addr);
 	if (pageNumber == 0){
 		return;	// Do not dump if it is an empty page
 	}
 	if (direction == 1) pageNumber = (pageNumber | INBOUND_MASK);
 
 	// write the page number, and direction of queue movement
-	void *pageAddr = (void *)((uintptr_t)pageNumber << 12);
+	void *pageAddr = (void *)((page_num_type)pageNumber << 12);
 	void *pageNumPtr = &pageNumber;
 	void *pageAddrPtr = &pageAddr;
 
@@ -276,23 +278,23 @@ int locateAndRemove(int number){
  * parameter addr is the address of the page not the page number
  */
 void movePage(void *addr, int direction){
-  printf("%s %p, %d\n", "movePage() called with the parameters: ", (void *)((((uintptr_t)addr)>>12)<<12), direction);
+  //printf("%s %p, %d\n", "movePage() called with the parameters: ", (void *)((((uintptr_t)addr)>>12)<<12), direction);
 
 	if (direction == 1){
 		// start by clearing out the spot
 		movePage(NULL, 0);
 
 		// check where in the COLD queue the page was (if anywhere) and remove it
-		int location = locateAndRemove((int)((uintptr_t)addr >> 12));
+		page_num_type location = locateAndRemove((page_num_type)((uintptr_t)addr >> 12));
 		//if (location != -1)
 		//	addMemRef(location);
 
 		// overwrite the front of the queue and increment
-		*queueHOTf = (int)((uintptr_t)addr >> 12);
+		*queueHOTf = (page_num_type)((uintptr_t)addr >> 12);
 
 
 		// TODO is this overwriting in the statics area?
-		queueHOTf = ((((int)(uintptr_t)queueHOTf - (int)(uintptr_t)mem) / sizeof(int) + 1)%(queueSizeHOT))+mem;
+		queueHOTf = ((((page_num_type)(uintptr_t)queueHOTf - (page_num_type)(uintptr_t)mem) / sizeof(page_num_type) + 1)%(queueSizeHOT))+mem;
 	}
 	else{
 		if(*queueHOTf != 0){
@@ -317,11 +319,14 @@ int mprotect(void *addr, size_t len, int prot){
   // 0 indicates moving out of the HOT queue, 1 indicates moving in
   int direction = 0;
   if (prot == (PROT_READ | PROT_WRITE)) direction = 1;
-  printf("protecting: %p  %lu %d\n", addr, len, direction);
+  //printf("protecting: %p  %lu %d\n", addr, len, direction);
 
   orig_mprotect original_mprotect;
   original_mprotect = (orig_mprotect)dlsym(RTLD_NEXT, "mprotect");
   int ret_value = original_mprotect(addr, len, prot);
+  if(ret_value == -1){
+    perror("mprotect() failed!!!!\n");
+  }
 
   if (!VALID){
     printf("NOT VALID!!!!\n");
@@ -357,11 +362,11 @@ void SIGSEGV_handler (int signum, siginfo_t *info, void *context){
 
 
 int dumbSearchAlgo(void *addr){
-	int pageNum = (int)PAGENUM((uintptr_t)addr);
+	page_num_type pageNum = (page_num_type)PAGENUM((uintptr_t)addr);
 	int i;
 
 	// return 1 if in HOT
-	int *location = queueHOTf-1;
+	page_num_type *location = queueHOTf-1;
 	if (location < mem) location = mem + queueSizeHOT-1;
 	for (i=0; i<queueSizeHOT; i++){
 	  if(*location == pageNum){
@@ -403,13 +408,13 @@ void _init_(){
 	sigaction(SIGSEGV, &sigact, NULL);
 
 	// set up the pointers to the HOT and COLD queues
-	mem = (int *)mmap(NULL, sizeof(int)*1000000, (PROT_READ | PROT_WRITE), 
+	mem = (page_num_type *)mmap(NULL, sizeof(page_num_type)*1000000, (PROT_READ | PROT_WRITE), 
 	(MAP_PRIVATE | MAP_ANONYMOUS), -1, 0);
 
 	queueSizeHOT = strtol(getenv("QUEUE_SIZE"), NULL, 10);
 
 	queueHOTf = mem;
-	queueCOLDf = (queueHOTf + sizeof(int)*(queueSizeHOT+1));
+	queueCOLDf = (queueHOTf + sizeof(page_num_type)*(queueSizeHOT+1));
 	queueCOLDb = queueCOLDf;
 
 	pid_t idn = getpid();

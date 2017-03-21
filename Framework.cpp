@@ -255,11 +255,8 @@ int main(int argc, char *argv[]){
 	struct timespec start_time, end_time, total_time;
 
 
-#ifdef LZO1
-	lzo1Algo test;
-#else
 	WKAlgo test;
-#endif
+
 
 	WK_word* addr;
 	WK_word* src_buf;
