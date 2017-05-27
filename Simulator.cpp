@@ -23,6 +23,7 @@ extern "C" {
 // constansts
 const int num_cache = 11;
 const long long disk_time = 4000000; // in ns
+const long long ssd_time = 100000; //in ns
 //const double multiple = 2.0;
 const int pages_per_fetch = 128;
 const int pre_fetch_queue_length = 3;
@@ -212,15 +213,15 @@ int main(int argc, char *argv[]){
 
   double multiple = strtod(argv[4], NULL);
 
-  FILE *output = fopen(/*"Final_Output.txt"*/ "Output_file.txt", "a+");
+  FILE *output = fopen(/*"Final_Output.txt"*/"64-bit_update.csv", "a+");
   
-  std::string input_file(argv[1]);
+  /*std::string input_file(argv[1]);
   std::string memory(argv[2]);
   std::string fileName = "miss_" + input_file + memory + "_.99";
   const char *name = fileName.c_str();
   FILE *miss_file = fopen(name, "w+");
   //double *miss_curve = (double *)malloc(sizeof(double)*2500000;
-  long long curve_count = 0;
+  long long curve_count = 0;*/
   
 
   // array of Allocator trackers
@@ -228,10 +229,16 @@ int main(int argc, char *argv[]){
 
   // use array to store total swap times
   long long total_times[num_cache];
+  long long ssd_total_times[num_cache];
+  long long noPar_total_times[num_cache];
+  long long noPar_ssd_total_times[num_cache];
   long long comp_times[num_cache];
   int clean;
   for (clean = 0; clean < num_cache; clean++){
     total_times[clean] = 0;
+    ssd_total_times[clean] = 0;
+    noPar_total_times[clean] = 0;
+    noPar_ssd_total_times[clean] = 0;
     comp_times[clean] = 0;
   }
 
@@ -282,7 +289,7 @@ int main(int argc, char *argv[]){
 	pushBackQueue(current_page, index);
 	//printf("3, ");
 	
-	curve_count++;
+	/*curve_count++;
 	locality = locality*alpha + index*(1-alpha);
 	if (curve_count%10000 == 0){
 	  fprintf(miss_file, "%f,", locality);
@@ -299,7 +306,7 @@ int main(int argc, char *argv[]){
 	    temp_pre_possible[i] = 0;
 	  }
 	  fprintf(miss_file, "\n");
-	  }
+	  }*/
 
         // REQUIRES LIST OF COMPRESSION PERCENTAGES IS LEAST TO GREATEST
         int i=num_cache-1; 
@@ -308,7 +315,22 @@ int main(int argc, char *argv[]){
 	//printf("4, ");
 
         while((index+queue_size > (int)((mem_size/4096)*(1-comp_perc_level[i]))) && i >= 0){
-	  //printf("5, ");
+
+
+	  // =================================== No Prefetch Tracking Section ============================================================
+	  if (index+queue_size <= (int)((mem_size/4096)*(1-comp_perc_level[i]))+(comp_perc_level[i]*mem_size/(perc_size_post_comp*4096))){
+
+            noPar_total_times[i] += (current_page.decomp_time + current_page.comp_time);
+	    noPar_ssd_total_times[i] += (current_page.decomp_time + current_page.comp_time);
+	    
+          }
+          // if the page is on the disk
+          else{
+            noPar_total_times[i] += disk_time;
+	    noPar_ssd_total_times[i] += ssd_time;
+          }
+
+	  // ================================================================================================================================
 
           int in_pre_fetch = searchPreFetch((((current_page.address)<<1)>>1), i);
 	  temp_pre_possible[i]++;
@@ -324,6 +346,7 @@ int main(int argc, char *argv[]){
 	    //printf("6, ");
 
             total_times[i] += current_page.decomp_time;
+	    ssd_total_times[i] += current_page.decomp_time;
             comp_times[i] += current_page.comp_time;
             comp_decomp += current_page.comp_time+current_page.decomp_time;
             comp_count++;
@@ -339,6 +362,7 @@ int main(int argc, char *argv[]){
           else{
 	    //printf("8, ");
             total_times[i] += disk_time;
+	    ssd_total_times[i] += ssd_time;
             //fragmentation[i].add(current_page.comp_size);
           }
           
@@ -359,7 +383,14 @@ int main(int argc, char *argv[]){
   int i;
   int index = 0;
   double min_percent = 1.0;
+  double noPar_min_percent = 1.0;
+  double ssd_min_percent = 1.0;
+  double ssd_noPar_min_percent = 1.0;
   double fetch_hit_rate = 0.0;
+  double time_spent = 0.0;
+  double noPar_time_spent = 0.0;
+  double noPar_ssd_time_spent = 0.0;
+  double ssd_time_spent = 0.0;
   for (i=0; i<num_cache; i++){
     printf("Total time: %f, Comp time saved: %f\n", (double)total_times[i]/1000000000, (double)comp_times[i]/1000000000);
     //printf("Frag average: %f,  %d\n", fragmentation[i].getAverage(), fragmentation[i].getInsert());
@@ -370,13 +401,29 @@ int main(int argc, char *argv[]){
     if(((double)total_times[i]/(double)total_times[0]) < min_percent){
       index = i;
       min_percent = (double)total_times[i]/total_times[0];
+      time_spent = (double)total_times[i]/1000000000;
+    }
+
+    if(((double)noPar_total_times[i]/(double)noPar_total_times[0]) < noPar_min_percent){
+      noPar_min_percent = (double)noPar_total_times[i]/noPar_total_times[0];
+      noPar_time_spent = (double)noPar_total_times[i]/1000000000;
+    }
+
+    if(((double)ssd_total_times[i]/(double)ssd_total_times[0]) < ssd_min_percent){
+      ssd_min_percent = (double)ssd_total_times[i]/ssd_total_times[0];
+      ssd_time_spent  = (double)ssd_total_times[i]/1000000000;
+    }
+
+    if(((double)noPar_ssd_total_times[i]/(double)noPar_ssd_total_times[0]) < ssd_noPar_min_percent){
+      ssd_noPar_min_percent = (double)noPar_ssd_total_times[i]/noPar_ssd_total_times[0];
+      noPar_ssd_time_spent = (double)noPar_ssd_total_times[i]/1000000000;
     }
   }
   //fflush
   //printHistograms(argv[1], fragmentation);
   
-  printf("%s %s %f %f %f %d %f %f\n", argv[1], argv[2], comp_perc_level[index], min_percent, (double)num_fetch_hits[index]/(double)num_fetch_possible[index], pages_per_fetch*pre_fetch_queue_length, 1.0/perc_size_post_comp, multiple);
-  fprintf(output, "%s %s %f %f %f %d %f %f\n", argv[1], argv[2], comp_perc_level[index], min_percent, (double)num_fetch_hits[index]/(double)num_fetch_possible[index], pages_per_fetch*pre_fetch_queue_length, 1.0/perc_size_post_comp, multiple);
+  printf("%s %s %f %f %f %f %f %f %f %f %f %d %f %f\n", argv[1], argv[2], comp_perc_level[index], min_percent, (double)total_times[0]/1000000000, time_spent, noPar_time_spent, (double)ssd_total_times[0]/1000000000, ssd_time_spent, noPar_ssd_time_spent, (double)num_fetch_hits[index]/(double)num_fetch_possible[index], pages_per_fetch*pre_fetch_queue_length, 1.0/perc_size_post_comp, multiple);
+  fprintf(output, "%s %s %f %f %f %f %f %f %f %f %f %d %f %f\n", argv[1], argv[2], comp_perc_level[index], min_percent, (double)total_times[0]/1000000000, time_spent, noPar_time_spent, (double)ssd_total_times[0]/1000000000, ssd_time_spent, noPar_ssd_time_spent, (double)num_fetch_hits[index]/(double)num_fetch_possible[index], pages_per_fetch*pre_fetch_queue_length, 1.0/perc_size_post_comp, multiple);
 
   printf("Average comp and decomp is: %f\n", (double)(comp_decomp/comp_count)/1000000000);
 
